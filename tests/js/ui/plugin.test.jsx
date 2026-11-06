@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { host, navigations, notices, PALETTE_AREA, queryClient, ROUTES_AREA, SIDEBAR_NAV_AREA } from '@hermes/plugin-sdk'
+import { navigations, notices, PALETTE_AREA, queryClient, ROUTES_AREA, SIDEBAR_NAV_AREA } from '@hermes/plugin-sdk'
 import fs from 'node:fs'
 import path from 'node:path'
 import plugin from '../../../desktop/plugin.js'
@@ -263,6 +263,7 @@ describe('writes wait for review and confirmation', () => {
     const [path, options] = writes(ctx)[0]
     expect(path).toBe('/sheets/s1/append')
     expect(options.body).toEqual({ rows: [['Coffee', '4.50'], ['Tea', '3.20']], range: 'A1', confirm: true })
+    await until(() => notices.some((notice) => notice.kind === 'success'), 'the success notice')
   })
 
   it('writes nothing when the sheet review is cancelled', async () => {
@@ -436,7 +437,7 @@ describe('settings', () => {
 })
 
 describe('source guards', () => {
-  it('uses theme variables instead of hard-coded colours, in both themes', () => {
+  it('uses theme variables instead of hard-coded colours', () => {
     expect(PLUGIN_SOURCE.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
   })
 
@@ -448,10 +449,5 @@ describe('source guards', () => {
       if (exempt(site.path)) continue
       expect(site.body, `write to ${site.path} must confirm`).toMatch(/confirm:\s*true/)
     }
-  })
-
-  it('reports successes through the host, not with a silent write', () => {
-    expect(host.notify).toBeTypeOf('function')
-    expect(notices).toEqual([])
   })
 })

@@ -92,6 +92,55 @@ def test_calendar_create_notifies_attendees(google, cet):
 # ── Calendar conflicts and availability ──────────────────────────────────────
 
 
+def test_conflicts_skip_a_meeting_the_user_declined(google, cet):
+    start = datetime(2026, 11, 12, 15, 0, tzinfo=cet)
+    google.queue(
+        FakeResponse(
+            200,
+            {
+                "items": [
+                    {
+                        "id": "e1",
+                        "summary": "Declined sync",
+                        "status": "confirmed",
+                        "start": {"dateTime": "2026-11-12T15:30:00+01:00"},
+                        "end": {"dateTime": "2026-11-12T16:00:00+01:00"},
+                        "attendees": [
+                            {"email": "me@example.com", "self": True, "responseStatus": "declined"},
+                            {"email": "ana@acme.test", "responseStatus": "accepted"},
+                        ],
+                    },
+                    {
+                        "id": "e2",
+                        "summary": "Accepted review",
+                        "status": "confirmed",
+                        "start": {"dateTime": "2026-11-12T15:40:00+01:00"},
+                        "end": {"dateTime": "2026-11-12T16:00:00+01:00"},
+                        "attendees": [{"email": "me@example.com", "self": True, "responseStatus": "accepted"}],
+                    },
+                ]
+            },
+        )
+    )
+    conflicts = services.calendar_conflicts(start, start + timedelta(hours=1))
+    assert [item["summary"] for item in conflicts] == ["Accepted review"]
+
+
+def test_local_offset_follows_daylight_saving_in_the_host_zone(cet):
+    winter = services.localize(datetime(2026, 1, 15, 9, 0))
+    summer = services.localize(datetime(2026, 7, 1, 9, 0))
+    assert services.rfc3339(winter) == "2026-01-15T08:00:00Z"
+    assert services.rfc3339(summer) == "2026-07-01T07:00:00Z"
+
+
+def test_sheets_rows_are_capped_and_empty_cells_become_blank():
+    with pytest.raises(WorkspaceError) as caught:
+        services.clean_rows([["x"]] * (services.MAX_APPEND_ROWS + 1))
+    assert caught.value.code == "bad_request"
+    assert f"At most {services.MAX_APPEND_ROWS} rows" in caught.value.message
+    assert services.clean_rows([[None, "x"]]) == [["", "x"]]
+
+
 def test_conflicts_list_overlapping_events_and_skip_cancelled(google, cet):
     start = datetime(2026, 11, 12, 15, 0, tzinfo=cet)
     google.queue(
