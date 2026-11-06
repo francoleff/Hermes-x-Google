@@ -44,6 +44,15 @@ CONFIRM_REQUIRED = [
     ("/brief/save", {"eventId": "ev1"}),
     ("/email-to-event", {"messageId": "m1"}),
     ("/contacts", {"name": "Ana Lopez", "email": "ana@example.com"}),
+    ("/calendar/events/e1/update", {"summary": "Board prep"}),
+    ("/calendar/events/e1/cancel", {}),
+    ("/calendar/events/e1/rsvp", {"response": "accepted"}),
+    ("/drive/files/f1/rename", {"name": "Plan"}),
+    ("/drive/files/f1/share", {"email": "ana@example.com"}),
+    ("/docs/d1/replace", {"find": "Q3", "replace": "Q4"}),
+    ("/sheets/s1/range", {"range": "Budget!A1", "rows": [["a"]]}),
+    ("/sheets/s1/tabs", {"title": "Q4"}),
+    ("/contacts/update", {"resourceName": "people/c1", "email": "bo@example.com"}),
 ]
 
 
@@ -199,3 +208,169 @@ def test_availability_route_reports_a_conflict(api_client):
     ).json()["data"]
     assert data["free"] is False
     assert data["conflicts"][0]["summary"] == "Standup"
+
+
+# ── Changes to existing items: events, files, docs, sheets, contacts ─────────
+
+EVENT_JSON = {
+    "id": "e1",
+    "summary": "Board prep",
+    "start": {"dateTime": "2026-11-12T15:00:00+01:00"},
+    "end": {"dateTime": "2026-11-12T16:00:00+01:00"},
+    "attendees": [
+        {"email": "me@example.com", "self": True, "responseStatus": "needsAction"},
+        {"email": "ana@acme.test", "responseStatus": "accepted"},
+    ],
+}
+
+
+def test_calendar_update_route_sends_only_the_fields_given(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {**EVENT_JSON, "summary": "Board prep v2"}))
+    response = client.post(
+        PREFIX + "/calendar/events/e1/update",
+        json={"summary": "Board prep v2", "sendUpdates": "none", "confirm": True},
+    )
+    assert response.status_code == 200
+    method, url, body = google.calls[0]
+    assert method == "PATCH"
+    assert body == {"summary": "Board prep v2"}
+    assert "sendUpdates=none" in url
+    assert response.json()["data"]["summary"] == "Board prep v2"
+
+
+def test_calendar_update_route_maps_times_zone_and_guests(api_client, cet):
+    client, google = api_client
+    google.queue(FakeResponse(200, EVENT_JSON), FakeResponse(200, EVENT_JSON))
+    response = client.post(
+        PREFIX + "/calendar/events/e1/update",
+        json={
+            "start": "2026-11-13T09:00",
+            "timezone": "Europe/Amsterdam",
+            "addAttendees": "bo@acme.test, cy@acme.test",
+            "confirm": True,
+        },
+    )
+    assert response.status_code == 200
+    assert [call[0] for call in google.calls] == ["GET", "PATCH"]
+    body = google.calls[1][2]
+    assert body["start"] == {"dateTime": "2026-11-13T09:00:00+01:00", "timeZone": "Europe/Amsterdam"}
+    assert body["end"] == {"dateTime": "2026-11-13T10:00:00+01:00", "timeZone": "Europe/Amsterdam"}
+    assert [a["email"] for a in body["attendees"]] == [
+        "me@example.com", "ana@acme.test", "bo@acme.test", "cy@acme.test",
+    ]
+
+
+def test_calendar_cancel_route_sends_the_notification_setting(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(204, None))
+    response = client.post(PREFIX + "/calendar/events/e1/cancel", json={"sendUpdates": "none", "confirm": True})
+    assert response.status_code == 200
+    method, url, _ = google.calls[0]
+    assert method == "DELETE"
+    assert url.endswith("/events/e1?sendUpdates=none")
+    assert response.json()["data"] == {"id": "e1", "cancelled": True, "sendUpdates": "none"}
+
+
+def test_rsvp_route_changes_only_my_response(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, EVENT_JSON), FakeResponse(200, EVENT_JSON))
+    response = client.post(PREFIX + "/calendar/events/e1/rsvp", json={"response": "declined", "confirm": True})
+    assert response.status_code == 200
+    assert [call[0] for call in google.calls] == ["GET", "PATCH"]
+    statuses = {a["email"]: a["responseStatus"] for a in google.calls[1][2]["attendees"]}
+    assert statuses == {"me@example.com": "declined", "ana@acme.test": "accepted"}
+    assert response.json()["data"]["response"] == "declined"
+
+
+def test_rsvp_route_refuses_an_unknown_response_before_reading(api_client):
+    client, google = api_client
+    response = client.post(PREFIX + "/calendar/events/e1/rsvp", json={"response": "maybe", "confirm": True})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "bad_request"
+    assert google.calls == []
+
+
+def test_drive_rename_route_returns_the_new_name(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"id": "f1", "name": "Plan v2", "mimeType": "application/pdf"}))
+    response = client.post(PREFIX + "/drive/files/f1/rename", json={"name": "Plan v2", "confirm": True})
+    assert response.status_code == 200
+    assert google.calls[0][2] == {"name": "Plan v2"}
+    assert response.json()["data"]["name"] == "Plan v2"
+
+
+def test_drive_share_route_reads_notify_as_a_flag_not_a_string(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"id": "perm1", "role": "writer"}))
+    response = client.post(
+        PREFIX + "/drive/files/f1/share",
+        json={"email": "ana@acme.test", "role": "writer", "notify": "false", "confirm": True},
+    )
+    assert response.status_code == 200
+    assert "sendNotificationEmail=false" in google.calls[0][1]
+    assert response.json()["data"]["notified"] is False
+
+
+def test_docs_replace_route_reports_the_match_count(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"replies": [{"replaceAllText": {"occurrencesChanged": 2}}]}))
+    response = client.post(
+        PREFIX + "/docs/d1/replace",
+        json={"find": "Q3", "replace": "Q4", "matchCase": False, "confirm": True},
+    )
+    assert response.status_code == 200
+    assert google.calls[0][2]["requests"][0]["replaceAllText"]["containsText"]["matchCase"] is False
+    assert response.json()["data"]["occurrencesChanged"] == 2
+
+
+def test_sheets_range_route_refuses_filled_cells_until_overwrite(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"values": [["Rent"]]}))
+    response = client.post(
+        PREFIX + "/sheets/s1/range",
+        json={"range": "Budget!A1", "rows": [["x"]], "confirm": True},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "bad_request"
+    assert google.methods() == ["GET"]
+
+
+def test_sheets_range_route_writes_when_overwrite_is_chosen(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"updatedRange": "Budget!A1", "updatedCells": 1}))
+    response = client.post(
+        PREFIX + "/sheets/s1/range",
+        json={"range": "Budget!A1", "rows": [["x"]], "overwrite": True, "confirm": True},
+    )
+    assert response.status_code == 200
+    assert google.methods() == ["PUT"]
+    assert response.json()["data"]["overwrote"] is True
+
+
+def test_sheets_tab_route_adds_the_tab(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"replies": [{"addSheet": {"properties": {"sheetId": 9, "title": "Q4"}}}]}))
+    response = client.post(PREFIX + "/sheets/s1/tabs", json={"title": "Q4", "confirm": True})
+    assert response.status_code == 200
+    assert google.calls[0][2] == {"requests": [{"addSheet": {"properties": {"title": "Q4"}}}]}
+    assert response.json()["data"]["sheetId"] == 9
+
+
+def test_contact_update_route_keeps_existing_details(api_client):
+    client, google = api_client
+    person = {
+        "resourceName": "people/c9",
+        "etag": "%E-1",
+        "names": [{"displayName": "Ana Lopez", "givenName": "Ana", "familyName": "Lopez"}],
+        "emailAddresses": [{"value": "ana@acme.test"}],
+    }
+    google.queue(FakeResponse(200, person), FakeResponse(200, person))
+    response = client.post(
+        PREFIX + "/contacts/update",
+        json={"resourceName": "people/c9", "email": "bo@acme.test", "confirm": True},
+    )
+    assert response.status_code == 200
+    body = google.calls[1][2]
+    assert [e["value"] for e in body["emailAddresses"]] == ["ana@acme.test", "bo@acme.test"]
+    assert "names" not in body

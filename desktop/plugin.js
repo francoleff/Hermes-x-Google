@@ -1174,7 +1174,7 @@ const RESPONSE_STYLE = {
   needsAction: { color: 'var(--ui-text-quaternary)', label: 'No reply' },
 }
 
-function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow }) {
+function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow, account }) {
   const [days, setDays] = useState(7)
   const agenda = useApi(`/calendar?days=${days}&max_results=100`, { extra: [days] })
   const events = agenda.data?.events || []
@@ -1225,14 +1225,17 @@ function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow }) {
         ] }) : null,
 
         showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
-          ? jsx(EventDetail, { event: selected, onBrief, onCreateEvent, onClose: narrow ? () => onSelect(null) : null })
+          ? jsx(EventDetail, { event: selected, account, onBrief, onCreateEvent, onClose: narrow ? () => onSelect(null) : null })
           : jsx(EmptyBlock, { icon: 'calendar', title: 'Pick a meeting', description: 'Choose an event to see guests, the agenda, and a briefing built from your mail and files.' }) }) : null,
       ],
     }),
   ] })
 }
 
-function EventDetail({ event, onBrief, onCreateEvent, onClose }) {
+function EventDetail({ event, account, onBrief, onCreateEvent, onClose }) {
+  const [editOpen, setEditOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const isOrganizer = !!account && event.organizer === account
   const description = String(event.description || '').trim()
   const attendees = event.attendees || []
   const response = (person) => RESPONSE_STYLE[person.response] || { color: 'var(--ui-text-quaternary)', label: person.response || 'Guest' }
@@ -1254,8 +1257,13 @@ function EventDetail({ event, onBrief, onCreateEvent, onClose }) {
       jsx(Button, { variant: 'default', size: 'sm', onClick: () => onBrief(event.id), children: 'Meeting brief' }),
       event.meetingLink ? jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(event.meetingLink), children: 'Join call' }) : null,
       event.webUrl ? jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => openUrl(event.webUrl), children: 'Open in Calendar' }) : null,
+      isOrganizer ? jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setEditOpen(true), children: 'Edit event' }) : null,
+      isOrganizer ? jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => setCancelOpen(true), children: 'Cancel event' }) : null,
       onCreateEvent ? jsx(Button, { variant: 'ghost', size: 'sm', onClick: onCreateEvent, children: 'New event' }) : null,
     ] }),
+    isOrganizer ? null : jsx(RsvpControls, { event }),
+    editOpen ? jsx(EditEventDialog, { event, onClose: () => setEditOpen(false) }) : null,
+    cancelOpen ? jsx(CancelEventDialog, { event, onClose: () => setCancelOpen(false) }) : null,
 
     jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.45rem' }, children: [
       jsx(SectionHeading, { title: 'Guests', detail: attendees.length ? `${attendees.length}` : 'Just you' }),
@@ -1614,14 +1622,16 @@ function DriveTab({ selectedFile, onSelect, onOrganize, onOpenDoc, onOpenSheet, 
         ] }) : null,
 
         showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
-          ? jsx(FileDetail, { file: selected, onOpenDoc, onOpenSheet, onClose: narrow ? () => onSelect(null) : null })
+          ? jsx(FileDetail, { file: selected, onOpenDoc, onOpenSheet, onChanged: (next) => onSelect(next), onClose: narrow ? () => onSelect(null) : null })
           : jsx(EmptyBlock, { icon: 'cloud', title: 'Pick a file', description: 'Choose a file to see who owns it, when it changed, and where to open it.' }) }) : null,
       ],
     }),
   ] })
 }
 
-function FileDetail({ file, onOpenDoc, onOpenSheet, onClose }) {
+function FileDetail({ file, onOpenDoc, onOpenSheet, onChanged, onClose }) {
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const isDoc = file.mimeType === MIME_DOC
   const isSheet = file.mimeType === MIME_SHEET
   const owners = file.owners || []
@@ -1644,7 +1654,11 @@ function FileDetail({ file, onOpenDoc, onOpenSheet, onClose }) {
       isDoc && onOpenDoc ? jsx(Button, { variant: 'default', size: 'sm', onClick: () => onOpenDoc(file), children: 'Read in Hermes' }) : null,
       isSheet && onOpenSheet ? jsx(Button, { variant: 'default', size: 'sm', onClick: () => onOpenSheet(file), children: 'View in Hermes' }) : null,
       file.webUrl ? jsx(Button, { variant: isDoc || isSheet ? 'outline' : 'default', size: 'sm', onClick: () => openUrl(file.webUrl), children: 'Open in Drive' }) : null,
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setRenameOpen(true), children: 'Rename' }),
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setShareOpen(true), children: 'Share' }),
     ] }),
+    renameOpen ? jsx(RenameFileDialog, { file, onClose: () => setRenameOpen(false), onRenamed: (next) => onChanged?.(next) }) : null,
+    shareOpen ? jsx(ShareFileDialog, { file, onClose: () => setShareOpen(false) }) : null,
 
     file.description ? jsxs('div', { children: [
       jsx(SectionHeading, { title: 'Description' }),
@@ -1781,6 +1795,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [appendOpen, setAppendOpen] = useState(false)
+  const [replaceOpen, setReplaceOpen] = useState(false)
   const params = new URLSearchParams({ max_results: '40', mime_type: MIME_DOC })
   if (query) params.set('query', query)
   const listing = useApi(`/drive?${params.toString()}`, { extra: [query] })
@@ -1827,6 +1842,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
             ] }),
             jsxs('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: [
               jsx(Button, { variant: 'default', size: 'sm', onClick: () => setAppendOpen(true), disabled: !reader.data, children: 'Append text' }),
+              jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setReplaceOpen(true), disabled: !reader.data, children: 'Replace text' }),
               jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(reader.data?.webUrl || current.webUrl), children: 'Open in Docs' }),
               onOpenFile ? jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => onOpenFile(current), children: 'File details' }) : null,
             ] }),
@@ -1843,6 +1859,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
       onCreated: (doc) => onSelect({ id: doc.id, name: doc.title, mimeType: MIME_DOC, webUrl: doc.webUrl }),
     }) : null,
     appendOpen && current ? jsx(AppendDocDialog, { doc: current, onClose: () => setAppendOpen(false) }) : null,
+    replaceOpen && current ? jsx(ReplaceDocTextDialog, { doc: current, onClose: () => setReplaceOpen(false) }) : null,
   ], })
 }
 
@@ -2008,6 +2025,8 @@ function SheetsTab({ selectedSheet, onSelect, narrow }) {
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [appendOpen, setAppendOpen] = useState(false)
+  const [writeOpen, setWriteOpen] = useState(false)
+  const [tabOpen, setTabOpen] = useState(false)
   const params = new URLSearchParams({ max_results: '40', mime_type: MIME_SHEET })
   if (query) params.set('query', query)
   const listing = useApi(`/drive?${params.toString()}`, { extra: [query] })
@@ -2063,6 +2082,8 @@ function SheetsTab({ selectedSheet, onSelect, narrow }) {
             ] }),
             jsxs('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: [
               jsx(Button, { variant: 'default', size: 'sm', onClick: () => setAppendOpen(true), children: 'Add rows' }),
+              jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setWriteOpen(true), children: 'Write cells' }),
+              jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => setTabOpen(true), children: 'Add tab' }),
               jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(current.webUrl || sheetUrl(current.id)), children: 'Open in Sheets' }),
             ] }),
             preview.isPending ? jsx(LoadingBlock, { label: 'Reading the sheet…', rows: 6 })
@@ -2075,6 +2096,8 @@ function SheetsTab({ selectedSheet, onSelect, narrow }) {
     }),
     createOpen ? jsx(CreateSheetDialog, { onClose: () => setCreateOpen(false), onCreated: (sheet) => onSelect(sheet) }) : null,
     appendOpen && current ? jsx(AppendSheetDialog, { sheet: current, onClose: () => setAppendOpen(false) }) : null,
+    writeOpen && current ? jsx(WriteRangeDialog, { sheet: current, onClose: () => setWriteOpen(false) }) : null,
+    tabOpen && current ? jsx(AddTabDialog, { sheet: current, onClose: () => setTabOpen(false) }) : null,
   ] })
 }
 
@@ -2217,6 +2240,7 @@ function ContactRow({ contact, selected, onClick }) {
 }
 
 function ContactDetail({ contact, onCompose, onClose }) {
+  const [editOpen, setEditOpen] = useState(false)
   const primary = (contact.emails || [])[0] || ''
   const context = [contact.title, contact.organization].filter(Boolean).join(' · ')
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.9rem 1rem 1.2rem' }, children: [
@@ -2230,6 +2254,8 @@ function ContactDetail({ contact, onCompose, onClose }) {
     ] }),
     primary ? jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children:
       jsx(Button, { variant: 'default', size: 'sm', onClick: () => onCompose({ to: primary }), children: 'Write email' }) }) : null,
+    jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setEditOpen(true), children: 'Edit contact' }) }),
+    editOpen ? jsx(EditContactDialog, { contact, onClose: () => setEditOpen(false) }) : null,
     (contact.emails || []).length ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.4rem' }, children: [
       jsx(SectionHeading, { title: 'Email' }),
       ...contact.emails.map((email) => jsx(CopyRow, { text: email, label: 'Email' }, email)),
@@ -2580,6 +2606,404 @@ function TabBar({ value, onChange }) {
   })
 }
 
+// ── Changes to existing items ────────────────────────────────────────────────
+// Each change follows one path: a form, a review that names the change, then an explicit confirm.
+// The write itself sends confirm: true, so nothing changes unless the person pressed confirm.
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MAX_UPDATE_CELLS = 1000
+const RSVP_OPTIONS = [
+  { response: 'accepted', label: 'Going' },
+  { response: 'tentative', label: 'Maybe' },
+  { response: 'declined', label: 'Decline' },
+]
+const ROLE_OPTIONS = [
+  { value: 'reader', label: 'Can view' },
+  { value: 'commenter', label: 'Can comment' },
+  { value: 'writer', label: 'Can edit' },
+]
+
+const rowsText = (count) => `${count} ${count === 1 ? 'row' : 'rows'}`
+const cellsText = (count) => `${count} ${count === 1 ? 'cell' : 'cells'}`
+const matchesText = (count) => (count === 1 ? '1 match' : `${count} matches`)
+
+function parseEmails(text) {
+  return String(text || '').split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean)
+}
+
+// One confirmed write. A failure is thrown, so the confirmation stays open and shows the message.
+async function confirmedWrite(request, { fallback, success, onDone }) {
+  try {
+    const result = await request()
+    refreshEverything()
+    host.notify({ kind: 'success', message: success(result) })
+    onDone?.(result)
+  } catch (err) {
+    throw new Error(errorInfo(err, fallback).message)
+  }
+}
+
+function CheckRow({ checked, onChange, children }) {
+  return jsxs('label', {
+    style: { display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.78rem', color: 'var(--ui-text-secondary)', cursor: 'pointer' },
+    children: [
+      jsx('input', { type: 'checkbox', checked, onChange: (event) => onChange(event.target.checked), style: { accentColor: 'var(--ui-accent)', margin: 0 } }),
+      children,
+    ],
+  })
+}
+
+function SelectField({ value, onChange, options }) {
+  return jsx('select', {
+    value,
+    onChange: (event) => onChange(event.target.value),
+    style: {
+      ...inputStyle,
+      height: '2rem',
+      padding: '0 0.5rem',
+      borderRadius: '6px',
+      border: '1px solid var(--ui-stroke-secondary)',
+      background: 'var(--ui-bg-secondary)',
+      color: 'inherit',
+      fontSize: '0.8rem',
+    },
+    children: options.map((option) => jsx('option', { value: option.value, children: option.label }, option.value)),
+  })
+}
+
+// A form, a review step that names the change, and the confirmation that sends it.
+function ReviewDialog({ title, description, ready, reviewLabel, confirmTitle, confirmDescription, confirmLabel, summary, onConfirm, onClose, children }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  return jsxs(Fragment, { children: [
+    jsx(Dialog, {
+      open: true,
+      onOpenChange: (open) => { if (!open) onClose() },
+      children: jsx(DialogContent, {
+        className: 'max-w-lg',
+        bodyClassName: 'gap-3',
+        children: jsxs(Fragment, { children: [
+          jsx(DialogHeader, { children: jsxs('div', { children: [
+            jsx(DialogTitle, { children: title }),
+            description ? jsx(DialogDescription, { children: description }) : null,
+          ] }) }),
+          children,
+          jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.45rem' }, children: [
+            jsx(Button, { variant: 'outline', size: 'sm', onClick: onClose, children: 'Cancel' }),
+            jsx(Button, { variant: 'default', size: 'sm', onClick: () => setConfirmOpen(true), disabled: !ready, children: reviewLabel }),
+          ] }),
+        ] }),
+      }),
+    }),
+    jsx(ConfirmDialog, {
+      open: confirmOpen,
+      onClose: () => setConfirmOpen(false),
+      onConfirm,
+      title: confirmTitle,
+      description: confirmDescription,
+      confirmLabel,
+      busyLabel: 'Saving…',
+      doneLabel: 'Saved',
+      children: jsx('div', {
+        style: { ...insetStyle, padding: '0.6rem 0.7rem', fontSize: '0.75rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', maxHeight: '9rem', overflow: 'auto' },
+        children: summary,
+      }),
+    }),
+  ] })
+}
+
+function EditEventDialog({ event, onClose }) {
+  const timed = !event.allDay
+  const [title, setTitle] = useState(event.summary || '')
+  const [start, setStart] = useState(timed ? localInputValue(event.start) : '')
+  const [end, setEnd] = useState(timed ? localInputValue(event.end) : '')
+  const [place, setPlace] = useState(event.location || '')
+  const [guests, setGuests] = useState('')
+  const [notify, setNotify] = useState(true)
+
+  const newGuests = parseEmails(guests)
+  const badGuests = newGuests.filter((address) => !EMAIL_RE.test(address))
+  const changes = {}
+  if (title.trim() && title.trim() !== event.summary) changes.summary = title.trim()
+  if (place.trim() !== (event.location || '')) changes.location = place.trim()
+  if (timed && start && start !== localInputValue(event.start)) changes.start = isoFromLocal(start)
+  if (timed && end && end !== localInputValue(event.end)) changes.end = isoFromLocal(end)
+  if (newGuests.length && !badGuests.length) changes.addAttendees = newGuests
+  const timesOk = !timed || (!!start && !!end && new Date(end) > new Date(start))
+  const ready = Object.keys(changes).length > 0 && timesOk && !badGuests.length && !!title.trim()
+  const summary = [
+    changes.summary ? `Title: ${changes.summary}` : null,
+    changes.start ? `Starts: ${fmtDateTime(changes.start)}` : null,
+    changes.end ? `Ends: ${fmtDateTime(changes.end)}` : null,
+    'location' in changes ? `Place: ${changes.location || '(cleared)'}` : null,
+    changes.addAttendees ? `Add guests: ${changes.addAttendees.join(', ')}` : null,
+    Object.keys(changes).length ? `Tell guests: ${notify ? 'yes' : 'no'}` : null,
+  ].filter(Boolean).join('\n')
+
+  return jsx(ReviewDialog, {
+    title: 'Edit event',
+    description: 'Change what you need. Nothing is saved until you review and confirm.',
+    ready,
+    reviewLabel: 'Review changes',
+    confirmTitle: `Save changes to “${event.summary}”?`,
+    confirmDescription: notify ? 'Guests are told about the change.' : 'Guests are not told.',
+    confirmLabel: 'Save changes',
+    summary,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/calendar/events/${encodeURIComponent(event.id)}/update`, { ...changes, sendUpdates: notify ? 'all' : 'none', confirm: true }),
+      { fallback: 'Could not change the event.', success: () => 'Event updated.', onDone: onClose },
+    ),
+    children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+      jsx(Field, { label: 'Title', children: jsx(Input, { value: title, onChange: (event) => setTitle(event.target.value) }) }),
+      timed
+        ? jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem' }, children: [
+          jsx(Field, { label: 'Starts', children: jsx(Input, { type: 'datetime-local', value: start, onChange: (event) => setStart(event.target.value) }) }),
+          jsx(Field, { label: 'Ends', children: jsx(Input, { type: 'datetime-local', value: end, onChange: (event) => setEnd(event.target.value) }) }),
+        ] })
+        : jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-text-quaternary)', lineHeight: 1.5 }, children: 'All-day events keep their dates here. Change the dates in Google Calendar.' }),
+      timed && start && end && !timesOk ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-red)' }, children: 'The end must be after the start.' }) : null,
+      jsx(Field, { label: 'Place', children: jsx(Input, { value: place, placeholder: 'Room, address or link', onChange: (event) => setPlace(event.target.value) }) }),
+      jsx(Field, { label: 'Add guests', hint: 'Email addresses separated by commas. Current guests stay.', children: jsx(Input, { value: guests, placeholder: 'bo@acme.test', onChange: (event) => setGuests(event.target.value) }) }),
+      badGuests.length ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-red)' }, children: `Check ${badGuests.join(', ')}.` }) : null,
+      jsx(CheckRow, { checked: notify, onChange: setNotify, children: 'Tell guests about the change' }),
+    ] }),
+  })
+}
+
+// Accept, maybe or decline. The organiser is told, so each reply is confirmed first.
+function RsvpControls({ event }) {
+  const [pending, setPending] = useState(null)
+  const me = (event.attendees || []).find((person) => person.self)
+  if (!me) return null
+  const option = RSVP_OPTIONS.find((item) => item.response === pending)
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.45rem' }, children: [
+    jsx(SectionHeading, { title: 'Your reply', detail: (RESPONSE_STYLE[me.response] || {}).label || 'No reply' }),
+    jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: RSVP_OPTIONS.map((item) => jsx(Button, {
+      variant: me.response === item.response ? 'secondary' : 'outline',
+      size: 'sm',
+      onClick: () => setPending(item.response),
+      children: item.label,
+    }, item.response)) }),
+    option ? jsx(ConfirmDialog, {
+      open: true,
+      onClose: () => setPending(null),
+      onConfirm: () => confirmedWrite(
+        () => post(`/calendar/events/${encodeURIComponent(event.id)}/rsvp`, { response: option.response, confirm: true }),
+        { fallback: 'Could not send your reply.', success: () => `Reply sent: ${option.label}.`, onDone: () => setPending(null) },
+      ),
+      title: `Reply “${option.label}” to “${event.summary}”?`,
+      description: 'The organiser is told how you replied. Nothing else changes.',
+      confirmLabel: 'Send reply',
+      busyLabel: 'Sending…',
+      doneLabel: 'Sent',
+    }) : null,
+  ] })
+}
+
+// Deleting an event is final for the calendar, so it is confirmed. Guests are told only when ticked.
+function CancelEventDialog({ event, onClose }) {
+  const hasGuests = (event.attendees || []).length > 0
+  const [notify, setNotify] = useState(true)
+  return jsx(ConfirmDialog, {
+    open: true,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/calendar/events/${encodeURIComponent(event.id)}/cancel`, { sendUpdates: hasGuests && notify ? 'all' : 'none', confirm: true }),
+      { fallback: 'Could not cancel the event.', success: () => 'Event cancelled.', onDone: onClose },
+    ),
+    title: `Cancel “${event.summary}”?`,
+    description: 'The event is deleted from your calendar.',
+    confirmLabel: 'Delete event',
+    busyLabel: 'Deleting…',
+    doneLabel: 'Deleted',
+    children: hasGuests ? jsx(CheckRow, { checked: notify, onChange: setNotify, children: 'Tell the guests' }) : null,
+  })
+}
+
+function RenameFileDialog({ file, onClose, onRenamed }) {
+  const [name, setName] = useState(file.name || '')
+  const next = name.trim()
+  return jsx(ReviewDialog, {
+    title: 'Rename file',
+    description: 'Collaborators see the new name straight away.',
+    ready: !!next && next !== file.name,
+    reviewLabel: 'Review rename',
+    confirmTitle: `Rename “${file.name}”?`,
+    confirmDescription: 'Only the name changes. Sharing and version history stay the same.',
+    confirmLabel: 'Rename file',
+    summary: `From: ${file.name}\nTo: ${next}`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/drive/files/${encodeURIComponent(file.id)}/rename`, { name: next, confirm: true }),
+      { fallback: 'Could not rename the file.', success: () => 'File renamed.', onDone: (result) => { onRenamed?.(result); onClose() } },
+    ),
+    children: jsx(Field, { label: 'New name', children: jsx(Input, { value: name, autoFocus: true, onChange: (event) => setName(event.target.value) }) }),
+  })
+}
+
+function ShareFileDialog({ file, onClose }) {
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('reader')
+  const [notify, setNotify] = useState(false)
+  const address = email.trim()
+  const roleLabel = (ROLE_OPTIONS.find((item) => item.value === role) || ROLE_OPTIONS[0]).label
+  return jsx(ReviewDialog, {
+    title: 'Share file',
+    description: 'Gives one person access. You can change or remove it later in Google Drive.',
+    ready: EMAIL_RE.test(address),
+    reviewLabel: 'Review share',
+    confirmTitle: `Share “${file.name}” with ${address}?`,
+    confirmDescription: 'Only this person gets access. Anyone else needs their own share.',
+    confirmLabel: 'Share file',
+    summary: `Person: ${address}\nAccess: ${roleLabel}\nEmail them: ${notify ? 'yes' : 'no'}`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/drive/files/${encodeURIComponent(file.id)}/share`, { email: address, role, notify, confirm: true }),
+      { fallback: 'Could not share the file.', success: () => `Shared with ${address}.`, onDone: onClose },
+    ),
+    children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+      jsx(Field, { label: 'Person', hint: 'Their Google account email address.', children: jsx(Input, { type: 'email', value: email, placeholder: 'name@example.com', autoFocus: true, onChange: (event) => setEmail(event.target.value) }) }),
+      jsx(Field, { label: 'Access', children: jsx(SelectField, { value: role, onChange: setRole, options: ROLE_OPTIONS }) }),
+      jsx(CheckRow, { checked: notify, onChange: setNotify, children: 'Email them about this share' }),
+    ] }),
+  })
+}
+
+function ReplaceDocTextDialog({ doc, onClose }) {
+  const [find, setFind] = useState('')
+  const [replace, setReplace] = useState('')
+  const [matchCase, setMatchCase] = useState(true)
+  const target = find.trim()
+  return jsx(ReviewDialog, {
+    title: 'Replace text',
+    description: 'Every match in this document changes at once. Google Docs keeps version history if you need to go back.',
+    ready: !!target,
+    reviewLabel: 'Review replacement',
+    confirmTitle: `Replace “${target}” in “${doc.name}”?`,
+    confirmDescription: 'Every match is changed.',
+    confirmLabel: 'Replace text',
+    summary: `Find: ${target}\nReplace with: ${replace || '(nothing: the matches are deleted)'}\nMatch capitals: ${matchCase ? 'yes' : 'no'}`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/docs/${encodeURIComponent(doc.id)}/replace`, { find: target, replace, matchCase, confirm: true }),
+      {
+        fallback: 'Could not replace the text.',
+        success: (result) => (result.occurrencesChanged ? `Replaced ${matchesText(result.occurrencesChanged)}.` : 'No matches found. Nothing changed.'),
+        onDone: onClose,
+      },
+    ),
+    children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+      jsx(Field, { label: 'Find', children: jsx(Input, { value: find, placeholder: 'Text to find', autoFocus: true, onChange: (event) => setFind(event.target.value) }) }),
+      jsx(Field, { label: 'Replace with', hint: 'Leave empty to delete the matches.', children: jsx(Input, { value: replace, placeholder: 'Replacement text (leave empty to delete)', onChange: (event) => setReplace(event.target.value) }) }),
+      jsx(CheckRow, { checked: matchCase, onChange: setMatchCase, children: 'Match capitals exactly' }),
+    ] }),
+  })
+}
+
+function WriteRangeDialog({ sheet, onClose }) {
+  const [range, setRange] = useState('')
+  const [text, setText] = useState('')
+  const [overwrite, setOverwrite] = useState(false)
+  const rows = parseRows(text)
+  const cells = rows.reduce((total, row) => total + row.length, 0)
+  const overLimit = cells > MAX_UPDATE_CELLS
+  const target = range.trim()
+  return jsx(ReviewDialog, {
+    title: 'Write cells',
+    description: `${sheet.name}. Start the range at the first cell to fill, for example Budget!A5:B5.`,
+    ready: !!target && rows.length > 0 && !overLimit,
+    reviewLabel: rows.length ? `Review ${rowsText(rows.length)}` : 'Review',
+    confirmTitle: `Write ${rowsText(rows.length)} to ${target} in “${sheet.name}”?`,
+    confirmDescription: overwrite
+      ? 'Cells that already have values are replaced.'
+      : 'If any of those cells already has a value, nothing is written.',
+    confirmLabel: 'Write cells',
+    summary: `Range: ${target}\nRows: ${rows.length} (${cellsText(cells)})\n${overwrite ? 'Replace cells that already have values' : 'Keep cells that already have values'}`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/sheets/${encodeURIComponent(sheet.id)}/range`, { range: target, rows, overwrite, confirm: true }),
+      { fallback: 'Could not write the cells.', success: (result) => `${cellsText(result.updatedCells || 0)} written.`, onDone: onClose },
+    ),
+    children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+      jsx(Field, { label: 'Range', hint: 'The tab name and the cells, for example Budget!A5:B5.', children: jsx(Input, { value: range, placeholder: 'Budget!A5:B5', autoFocus: true, onChange: (event) => setRange(event.target.value) }) }),
+      jsx(Field, { label: 'Rows', hint: 'One row per line. Separate cells with tabs or commas.', children: jsx(Textarea, {
+        value: text,
+        onChange: (event) => setText(event.target.value),
+        placeholder: 'Lunch\t12.00',
+        style: { width: '100%', minHeight: '8rem', resize: 'vertical', lineHeight: 1.55, fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: '0.75rem' },
+      }) }),
+      overLimit ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-red)' }, children: `Write at most ${MAX_UPDATE_CELLS} cells at a time.` }) : null,
+      jsx(CheckRow, { checked: overwrite, onChange: setOverwrite, children: 'Replace cells that already have values' }),
+    ] }),
+  })
+}
+
+function AddTabDialog({ sheet, onClose }) {
+  const [title, setTitle] = useState('')
+  const name = title.trim()
+  return jsx(ReviewDialog, {
+    title: 'Add a tab',
+    description: `${sheet.name}. The new tab starts empty.`,
+    ready: !!name,
+    reviewLabel: 'Review tab',
+    confirmTitle: `Add a tab named “${name}” to “${sheet.name}”?`,
+    confirmDescription: 'Existing tabs and their data are not changed.',
+    confirmLabel: 'Add tab',
+    summary: `New tab: ${name}`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/sheets/${encodeURIComponent(sheet.id)}/tabs`, { title: name, confirm: true }),
+      { fallback: 'Could not add the tab.', success: () => `Tab “${name}” added.`, onDone: onClose },
+    ),
+    children: jsx(Field, { label: 'Tab name', children: jsx(Input, { value: title, placeholder: 'Q4', autoFocus: true, onChange: (event) => setTitle(event.target.value) }) }),
+  })
+}
+
+function EditContactDialog({ contact, onClose }) {
+  const [name, setName] = useState(contact.name || '')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [organization, setOrganization] = useState(contact.organization || '')
+  const [title, setTitle] = useState(contact.title || '')
+  const changes = {}
+  if (name.trim() && name.trim() !== (contact.name || '')) changes.name = name.trim()
+  if (email.trim()) changes.email = email.trim()
+  if (phone.trim()) changes.phone = phone.trim()
+  if (organization.trim() && organization.trim() !== (contact.organization || '')) changes.organization = organization.trim()
+  if (title.trim() && title.trim() !== (contact.title || '')) changes.title = title.trim()
+  const emailOk = !email.trim() || EMAIL_RE.test(email.trim())
+  const summary = [
+    changes.name ? `Name: ${changes.name}` : null,
+    changes.email ? `Add email: ${changes.email}` : null,
+    changes.phone ? `Add phone: ${changes.phone}` : null,
+    changes.organization ? `Organisation: ${changes.organization}` : null,
+    changes.title ? `Job title: ${changes.title}` : null,
+  ].filter(Boolean).join('\n')
+
+  return jsx(ReviewDialog, {
+    title: 'Edit contact',
+    description: 'Only the fields you change are saved. Existing emails and phone numbers are kept.',
+    ready: Object.keys(changes).length > 0 && emailOk,
+    reviewLabel: 'Review changes',
+    confirmTitle: `Save changes to “${contact.name || 'this contact'}”?`,
+    confirmDescription: 'The contact syncs to your devices.',
+    confirmLabel: 'Save contact',
+    summary,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post('/contacts/update', { resourceName: contact.resourceName, ...changes, confirm: true }),
+      { fallback: 'Could not save the contact.', success: () => 'Contact saved.', onDone: onClose },
+    ),
+    children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+      jsx(Field, { label: 'Name', hint: 'Leave as it is to keep the current name.', children: jsx(Input, { value: name, onChange: (event) => setName(event.target.value) }) }),
+      jsx(Field, { label: 'Add email', hint: !emailOk ? 'Check the email address.' : 'Keeps the addresses already on the contact.', children: jsx(Input, { value: email, type: 'email', placeholder: 'ana@acme.test', onChange: (event) => setEmail(event.target.value) }) }),
+      jsx(Field, { label: 'Add phone', children: jsx(Input, { value: phone, placeholder: '+31 6 1234 5678', onChange: (event) => setPhone(event.target.value) }) }),
+      jsx(Field, { label: 'Organisation', children: jsx(Input, { value: organization, placeholder: 'Acme', onChange: (event) => setOrganization(event.target.value) }) }),
+      jsx(Field, { label: 'Job title', hint: 'To remove a value, edit it in Google Contacts.', children: jsx(Input, { value: title, placeholder: 'CFO', onChange: (event) => setTitle(event.target.value) }) }),
+    ] }),
+  })
+}
+
 function GoogleWorkspacePage() {
   const narrow = useNarrow()
   const [tab, setTab] = useState('Overview')
@@ -2618,7 +3042,7 @@ function GoogleWorkspacePage() {
       case 'Gmail':
         return jsx(GmailTab, { selectedId: selectedMessageId, onSelect: setSelectedMessageId, onCompose: openCompose, onEmailToEvent: setEmailToEventMessage, narrow })
       case 'Calendar':
-        return jsx(CalendarTab, { selectedId: selectedEventId, onSelect: setSelectedEventId, onCreateEvent: () => setEventOpen(true), onBrief: openBrief, narrow })
+        return jsx(CalendarTab, { selectedId: selectedEventId, onSelect: setSelectedEventId, onCreateEvent: () => setEventOpen(true), onBrief: openBrief, narrow, account: status.data?.account || '' })
       case 'Drive':
         return jsx(DriveTab, { selectedFile, onSelect: setSelectedFile, onOrganize: () => setOrganizeOpen(true), onOpenDoc: openDoc, onOpenSheet: openSheet, narrow })
       case 'Docs':

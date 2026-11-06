@@ -106,6 +106,30 @@ def _envelope(data: Any) -> dict:
     return {"ok": True, "data": data}
 
 
+def _flag(value: Any) -> bool:
+    """A JSON boolean, or the string forms a form might send. The string "false" is false."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _flag_default(value: Any, default: bool) -> bool:
+    return default if value is None else _flag(value)
+
+
+def _emails(value: Any) -> list[str]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        value = value.replace(";", ",").split(",")
+    if not isinstance(value, list):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "bad_request", "message": "addAttendees must be a list of email addresses."},
+        )
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 # ── Status ───────────────────────────────────────────────────────────────────
 
 
@@ -609,6 +633,150 @@ def sheets_append(spreadsheet_id: str, payload: dict = Body(...)) -> dict:
             spreadsheet_id,
             services.clean_rows(body.get("rows")),
             str(body.get("range") or "A1"),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+# ── Changes to existing items ────────────────────────────────────────────────
+# The UI reviews each change and then sends confirm: true. Nothing here is sent without it.
+
+
+@router.post("/calendar/events/{event_id}/update")
+def update_event(event_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "change a calendar event")
+    try:
+        result = services.calendar_update_event(
+            event_id,
+            summary=None if body.get("summary") is None else str(body.get("summary")),
+            start=str(body.get("start") or ""),
+            end=str(body.get("end") or ""),
+            description=None if body.get("description") is None else str(body.get("description")),
+            location=None if body.get("location") is None else str(body.get("location")),
+            add_attendees=_emails(body.get("addAttendees")),
+            timezone_name=str(body.get("timezone") or ""),
+            send_updates=str(body.get("sendUpdates") or "all"),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/calendar/events/{event_id}/cancel")
+def cancel_event(event_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "cancel a calendar event")
+    try:
+        result = services.calendar_cancel_event(event_id, send_updates=str(body.get("sendUpdates") or "all"))
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/calendar/events/{event_id}/rsvp")
+def rsvp_event(event_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "reply to a calendar invitation")
+    try:
+        result = services.calendar_rsvp(event_id, str(body.get("response") or ""))
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/drive/files/{file_id}/rename")
+def rename_file(file_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "rename a Drive file")
+    try:
+        result = services.drive_rename(file_id, str(body.get("name") or ""))
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/drive/files/{file_id}/share")
+def share_file(file_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "share a Drive file")
+    try:
+        result = services.drive_share(
+            file_id,
+            str(body.get("email") or ""),
+            role=str(body.get("role") or "reader"),
+            notify=_flag(body.get("notify")),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/docs/{document_id}/replace")
+def replace_doc_text(document_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "replace text in a Google Doc")
+    try:
+        result = services.docs_replace_text(
+            document_id,
+            str(body.get("find") or ""),
+            str(body.get("replace") or ""),
+            match_case=_flag_default(body.get("matchCase"), True),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/sheets/{spreadsheet_id}/range")
+def sheets_write_range(spreadsheet_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "write cells in a Google Sheet")
+    try:
+        result = services.sheets_update_range(
+            spreadsheet_id,
+            str(body.get("range") or ""),
+            services.clean_rows(body.get("rows")),
+            overwrite=_flag(body.get("overwrite")),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/sheets/{spreadsheet_id}/tabs")
+def sheets_add_tab(spreadsheet_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "add a tab to a Google Sheet")
+    try:
+        result = services.sheets_create_tab(spreadsheet_id, str(body.get("title") or ""))
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/contacts/update")
+def update_contact(payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "change a Google contact")
+    try:
+        result = services.contacts_update(
+            str(body.get("resourceName") or ""),
+            name=str(body.get("name") or ""),
+            email=str(body.get("email") or ""),
+            phone=str(body.get("phone") or ""),
+            organization=str(body.get("organization") or ""),
+            title=str(body.get("title") or ""),
         )
     except WorkspaceError as exc:
         raise _http(exc) from None

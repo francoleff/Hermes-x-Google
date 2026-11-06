@@ -5,9 +5,9 @@ One place for your Google work inside Hermes Desktop, and an agent that can work
 - **For you:** a sidebar page with Gmail, Calendar, Drive, Docs, Sheets and Contacts, plus a search that covers Gmail, Calendar and Drive at once.
 - **For Hermes:** 38 tools that read and write those services. Hermes can combine them in one task, for example "prepare me for my meeting with James tomorrow".
 
-Nothing is sent, shared, created or moved until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
+Nothing is sent, shared, created, moved, changed or cancelled until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
 
-> **Status: partly proven against a live Google account.** The automated tests (191 Python, 15 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. **No write has been run against Google.** The 14 newest tools are tested only against a fake Google. The desktop UI has **not** been run inside the running Hermes Desktop app. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
+> **Status: partly proven against a live Google account.** The automated tests (212 Python, 26 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. **No write has been run against Google.** The 14 newest tools are tested only against a fake Google. The desktop UI has **not** been run inside the running Hermes Desktop app. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
 
 ## What you can do
 
@@ -15,22 +15,22 @@ Nothing is sent, shared, created or moved until you approve it. Reading, searchi
 |---|---|---|
 | **Overview** | Unread count, today's agenda, recent files, workflow cards (meeting brief, invoices to Sheet, organise Drive), and a search across Gmail, Calendar and Drive | `google_search` |
 | **Gmail** | Inbox and search, read a message, mark read or unread, star, archive, compose, reply, forward, create an event from a message | `google_gmail_search`, `google_gmail_read`, `google_gmail_send`, `google_gmail_draft`, `google_gmail_modify` |
-| **Calendar** | Agenda, event details, new event with a live clash warning, meeting brief | `google_calendar_agenda`, `google_calendar_check_availability`, `google_calendar_create_event` |
-| **Drive** | Recent files, search with Docs, Sheets and Folders filters, file details, Organise Drive (preview, then move files into one folder) | `google_drive_search`, `google_drive_create_folder`, `google_drive_move` |
-| **Docs** | List and search, read text, create, append text | `google_docs_read`, `google_docs_create`, `google_docs_append` |
-| **Sheets** | List and search, preview a range, create a sheet, add rows after review | `google_sheets_read`, `google_sheets_create`, `google_sheets_append` |
-| **Contacts** | Search, contact details, create a contact after review | `google_contacts_search`, `google_contacts_create` |
+| **Calendar** | Agenda, event details, new event with a live clash warning, meeting brief; edit an event, cancel an event you organise, reply Going, Maybe or Decline to an invitation | `google_calendar_agenda`, `google_calendar_check_availability`, `google_calendar_create_event`, `google_calendar_update_event`, `google_calendar_cancel_event`, `google_calendar_rsvp` |
+| **Drive** | Recent files, search with Docs, Sheets and Folders filters, file details, rename, share with one person, Organise Drive (preview, then move files into one folder) | `google_drive_search`, `google_drive_create_folder`, `google_drive_move`, `google_drive_rename`, `google_drive_share` |
+| **Docs** | List and search, read text, create, append text, replace text (every match, after review) | `google_docs_read`, `google_docs_create`, `google_docs_append`, `google_docs_replace_text` |
+| **Sheets** | List and search, preview a range, create a sheet, add rows after review, write up to 1,000 cells in a range (cells that already have values are kept unless you choose to replace them), add a tab | `google_sheets_read`, `google_sheets_create`, `google_sheets_append`, `google_sheets_update_range`, `google_sheets_create_tab` |
+| **Contacts** | Search, contact details, create a contact after review, edit a contact after review (existing emails and phone numbers are kept) | `google_contacts_search`, `google_contacts_create`, `google_contacts_update` |
 | **Cross-app** | Meeting brief, email to event, invoices to Sheet, organise Drive | `google_meeting_brief`, `google_email_to_event`, `google_invoices_to_sheet`, `google_organize_drive` |
-| **Hermes only** (no sidebar controls yet) | Reschedule, cancel and RSVP for events; forward mail; edit a draft; replace text in a Doc; write a range and add a tab in Sheets; update a contact; rename and share Drive files; search calendar; read Drive file and Sheets metadata | the 14 tools marked *new* in the tool reference |
+| **Hermes only** (no sidebar controls) | Search calendar events; forward a message in one step; edit a draft; read one Drive file's details; read a Sheet's tabs and row counts | `google_calendar_search`, `google_gmail_forward`, `google_gmail_update_draft`, `google_drive_get`, `google_sheets_metadata` |
 | **Settings** | What Hermes can reach, live connection status, sign-in and sign-out commands | none |
 
 ### Not implemented yet
 
 These are missing from the sidebar, from Hermes, or both:
 
-- **Newer tools in the sidebar:** the 14 tools listed as *new* in the tool reference have no controls in the sidebar yet. Hermes can use them; the UI cannot.
+- **Hermes-only actions:** a one-step forward, editing a draft, a calendar-only search and a Sheet's tab list have no sidebar controls. Hermes can use them.
 - **Gmail:** downloading attachments. Attachments on a draft you update, or on a message you forward, are not kept.
-- **Calendar:** nothing beyond what the sidebar already does (agenda, details, create, clash check) in the UI.
+- **Calendar:** attachments. Recurring events act on one occurrence: an edit or cancel changes only the occurrence you open, and changing a whole series is not built.
 - **Drive:** upload and download; a tool that reads a file's contents (Docs and Sheets have their own read tools); a standalone new-folder action in the UI (folders are created by Organise Drive and by the Hermes tool).
 - **Docs:** formatting; a metadata tool.
 - **Sheets:** formatting.
@@ -207,11 +207,11 @@ Workflows call the services module and never call Google directly. Each service 
 ## Testing
 
 ```bash
-# Python: 191 tests, no network. Use Python 3.13.
+# Python: 212 tests, no network. Use Python 3.13.
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/python
 
-# Desktop UI: 15 tests under jsdom, against an SDK stand-in.
+# Desktop UI: 26 tests under jsdom, against an SDK stand-in.
 cd tests/js && npm install && npm test
 
 # Lint the desktop file for unresolved names and dead code.
@@ -232,10 +232,11 @@ What the tests cover:
 - **Contract:** the exact tool set, in one toolset; the approval classification; the manifest's scopes.
 - **API:** consequential write routes refuse requests without `confirm`, and `confirm` must be `true`, not merely present.
 - **UI (jsdom):** registration; the connect gate (no account data is fetched before sign-in); lazy tabs; keyboard tab navigation; review-then-confirm for sheet rows, with cancel; contact validation; reversible star; permission errors in plain language; cross-service search; the calendar clash warning; a success notice after an append; no hard-coded colours; every write call sends `confirm: true` except drafts and reversible label changes.
+- **UI, changes to existing items:** each change opens a form, then a review that names it, then a confirmation. Nothing is sent before the confirmation. Edit and cancel appear only for events you organise, and replies only for events you were invited to. Writing cells refuses cells that already have values unless you choose to replace them.
 
-Two deliberate breakages were tested and caught by the suite: removing `confirm: true` from the Sheets append, and making the review button write without review. Both made tests fail. The plugin file was restored byte-for-byte afterwards. For the newer tools, twelve safety checks were removed one at a time (eleven in the service layer, one in the approval hook). The suite caught each one, and each file was restored byte-for-byte.
+Two deliberate breakages were tested and caught by the suite: removing `confirm: true` from the Sheets append, and making the review button write without review. Both made tests fail. For the newer tools, twelve safety checks were removed one at a time (eleven in the service layer, one in the approval hook), and the suite caught each one. For the sidebar actions, five more were removed one at a time: the review bypass, the organiser-only check, the confirm flag on calendar edits, the sheet overwrite guard, and error handling. The suite caught each one. Every file was restored byte-for-byte afterwards.
 
-**Not covered by any test:** dark and light appearance, responsive layout, keyboard focus order beyond tab navigation, screen-reader behaviour, and real Google calls. The newer tools also have no UI tests, because they have no UI yet.
+**Not covered by any test:** dark and light appearance, responsive layout, keyboard focus order beyond tab navigation, screen-reader behaviour, the running Hermes Desktop app, and real Google calls for the new writes. The sidebar changes are tested in jsdom against a fake Google.
 
 ## Live check: what to run with your own account
 
