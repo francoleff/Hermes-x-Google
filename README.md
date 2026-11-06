@@ -7,7 +7,7 @@ One place for your Google work inside Hermes Desktop, and an agent that can work
 
 Nothing is sent, shared, created, moved, changed or cancelled until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
 
-> **Status: partly proven against a live Google account.** The automated tests (212 Python, 26 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. **No write has been run against Google.** The 14 newest tools are tested only against a fake Google. The desktop UI has **not** been run inside the running Hermes Desktop app. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
+> **Status: partly proven against a live Google account.** The automated tests (212 Python, 26 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
 
 ## What you can do
 
@@ -236,7 +236,7 @@ What the tests cover:
 
 Two deliberate breakages were tested and caught by the suite: removing `confirm: true` from the Sheets append, and making the review button write without review. Both made tests fail. For the newer tools, twelve safety checks were removed one at a time (eleven in the service layer, one in the approval hook), and the suite caught each one. For the sidebar actions, five more were removed one at a time: the review bypass, the organiser-only check, the confirm flag on calendar edits, the sheet overwrite guard, and error handling. The suite caught each one. Every file was restored byte-for-byte afterwards.
 
-**Not covered by any test:** dark and light appearance, responsive layout, keyboard focus order beyond tab navigation, screen-reader behaviour, the running Hermes Desktop app, and real Google calls for the new writes. The sidebar changes are tested in jsdom against a fake Google.
+**Not covered by any test:** dark and light appearance, responsive layout, keyboard focus order beyond tab navigation, screen-reader behaviour, the running Hermes Desktop app, and RSVP against a real invitation. The sidebar changes are tested in jsdom against a fake Google. The other new writes were run once against a test account (see the status note at the top).
 
 ## Live check: what to run with your own account
 
