@@ -1,0 +1,20 @@
+{
+  "name": "google-workspace-hermes-desktop-tests",
+  "private": true,
+  "description": "Test tooling for desktop/plugin.js. Not shipped: the plugin itself has no runtime npm dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint --config eslint.config.mjs ../../desktop/plugin.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@tanstack/react-query": "5.104.1",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
+    "jsdom": "29.1.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vitest": "4.1.12"
+  }
+}

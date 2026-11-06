@@ -11,6 +11,39 @@ author: Franco Leff
 license: MIT
 tags: [google, gmail, calendar, drive, docs, sheets, productivity]
 
+# Lowest Hermes release with the pieces this plugin needs: the plugin OAuth flow (first stable tag
+# v0.22.3) and the desktop SDK surface it imports. Verified with `hermes plugins validate` on 0.22.7.
+requires_hermes: ">=0.22.3"
+
+# Declared surface. `hermes plugins validate` fails if register(ctx) adds anything not listed here.
+provides_tools:
+  - google_search
+  - google_gmail_search
+  - google_gmail_read
+  - google_gmail_send
+  - google_gmail_draft
+  - google_gmail_modify
+  - google_calendar_agenda
+  - google_calendar_create_event
+  - google_calendar_check_availability
+  - google_drive_search
+  - google_drive_create_folder
+  - google_drive_move
+  - google_docs_read
+  - google_docs_create
+  - google_docs_append
+  - google_sheets_read
+  - google_sheets_create
+  - google_sheets_append
+  - google_contacts_search
+  - google_contacts_create
+  - google_meeting_brief
+  - google_email_to_event
+  - google_invoices_to_sheet
+  - google_organize_drive
+provides_hooks:
+  - pre_tool_call
+
 # Google owns the OAuth flow. Hermes stores and refreshes the grant; the plugin never
 # sees the access token, refresh token or client secret. The user signs in once from a
 # terminal: `hermes auth add google-workspace:google`.
@@ -30,9 +63,10 @@ oauth:
     authorize_url: https://accounts.google.com/o/oauth2/v2/auth
     token_url: https://oauth2.googleapis.com/token
     scopes:
-      # Read mail and send/draft as the user. Kept to three narrow scopes instead of
-      # the all-or-nothing https://mail.google.com/ scope.
-      - https://www.googleapis.com/auth/gmail.readonly
+      # Read mail, change its labels (read/unread, star, archive), send and draft as the
+      # user. gmail.modify includes read access. Narrower than https://mail.google.com/,
+      # which is never requested.
+      - https://www.googleapis.com/auth/gmail.modify
       - https://www.googleapis.com/auth/gmail.send
       - https://www.googleapis.com/auth/gmail.compose
       - https://www.googleapis.com/auth/calendar.events
@@ -41,7 +75,8 @@ oauth:
       - https://www.googleapis.com/auth/drive
       - https://www.googleapis.com/auth/documents
       - https://www.googleapis.com/auth/spreadsheets
-      - https://www.googleapis.com/auth/contacts.readonly
+      # Read contacts and create them. Creating needs write access; no narrower scope exists.
+      - https://www.googleapis.com/auth/contacts
     client_id_env: GOOGLE_WORKSPACE_CLIENT_ID
     client_secret_env: GOOGLE_WORKSPACE_CLIENT_SECRET
     hosts:

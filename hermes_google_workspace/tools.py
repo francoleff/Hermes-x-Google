@@ -160,6 +160,20 @@ def _h_calendar_create_event(args: dict) -> dict:
     )
 
 
+def _h_gmail_modify(args: dict) -> dict:
+    return services.gmail_modify(_required(args, "message_id"), _required(args, "action"))
+
+
+def _h_calendar_check_availability(args: dict) -> dict:
+    return services.calendar_availability(
+        _required(args, "start"), _required(args, "end"), _text(args, "timezone")
+    )
+
+
+def _h_sheets_create(args: dict) -> dict:
+    return services.sheets_create(_required(args, "title"), _text(args, "sheet_title") or "Sheet1")
+
+
 def _h_drive_search(args: dict) -> dict:
     return services.drive_search(
         query=_text(args, "query"),
@@ -217,6 +231,16 @@ def _h_contacts_search(args: dict) -> dict:
     return services.contacts_list(client.clamp(args.get("max_results"), 1, 100, 25))
 
 
+def _h_contacts_create(args: dict) -> dict:
+    return services.contacts_create(
+        name=_required(args, "name"),
+        email=_text(args, "email"),
+        phone=_text(args, "phone"),
+        organization=_text(args, "organization"),
+        title=_text(args, "title"),
+    )
+
+
 def _h_meeting_brief(args: dict) -> dict:
     brief = workflows.meeting_brief(
         event_id=_text(args, "event_id"),
@@ -245,7 +269,6 @@ def _h_email_to_event(args: dict) -> dict:
 def _h_invoices_to_sheet(args: dict) -> dict:
     return workflows.invoices_to_sheet(
         spreadsheet_id=_text(args, "spreadsheet_id"),
-        cell_range=_text(args, "range") or "Invoices!A1",
         query=_text(args, "query"),
         days=client.clamp(args.get("days"), 1, 365, 45),
         max_results=client.clamp(args.get("max_results"), 1, 50, 15),
@@ -350,6 +373,22 @@ SCHEMAS: list[dict] = [
         }, ["to", "subject", "body"]),
     },
     {
+        "name": "google_gmail_modify",
+        "description": (
+            "Change one Gmail message: mark it read or unread, star or unstar it, or archive it "
+            "(remove it from the Inbox). Reversible and sends nothing, so it needs no approval. "
+            "Use it when the user asks to triage, tidy or follow up on a message."
+        ),
+        "parameters": _schema({
+            "message_id": {"type": "string", "description": "Gmail message id."},
+            "action": {
+                "type": "string",
+                "enum": ["mark_read", "mark_unread", "star", "unstar", "archive"],
+                "description": "The change to make.",
+            },
+        }, ["message_id", "action"]),
+    },
+    {
         "name": "google_calendar_agenda",
         "description": (
             "List upcoming events from the primary calendar in chronological order. Read-only. "
@@ -360,6 +399,21 @@ SCHEMAS: list[dict] = [
             "max_results": {"type": "integer", "description": "1-100. Default 20."},
             "time_min": {"type": "string", "description": "ISO start. Defaults to now."},
         }),
+    },
+    {
+        "name": "google_calendar_check_availability",
+        "description": (
+            "Check whether a time window is free on the primary calendar and list the events that "
+            "overlap it. Read-only. Use it before proposing or booking a time, or to explain a clash."
+        ),
+        "parameters": _schema({
+            "start": {"type": "string", "description": "ISO 8601 start, e.g. 2026-11-12T15:00:00+01:00."},
+            "end": {"type": "string", "description": "ISO 8601 end, after the start."},
+            "timezone": {
+                "type": "string",
+                "description": "IANA zone for values without an offset, e.g. Europe/Amsterdam.",
+            },
+        }, ["start", "end"]),
     },
     {
         "name": "google_calendar_create_event",
@@ -450,6 +504,16 @@ SCHEMAS: list[dict] = [
         }, ["spreadsheet_id"]),
     },
     {
+        "name": "google_sheets_create",
+        "description": (
+            "Create a new Google Sheet in your Drive. Requires human approval. Returns the sheet link."
+        ),
+        "parameters": _schema({
+            "title": {"type": "string"},
+            "sheet_title": {"type": "string", "description": "Name of the first tab. Default Sheet1."},
+        }, ["title"]),
+    },
+    {
         "name": "google_sheets_append",
         "description": (
             "Append rows after the last row of a Sheet range. Requires human approval. "
@@ -471,6 +535,21 @@ SCHEMAS: list[dict] = [
             "query": {"type": "string"},
             "max_results": {"type": "integer", "description": "1-30. Default 10."},
         }),
+    },
+    {
+        "name": "google_contacts_create",
+        "description": (
+            "Create a Google contact with a name and an email address and/or phone number. "
+            "Requires human approval because it writes to the user's contacts. Check with "
+            "google_contacts_search first so the same person is not added twice."
+        ),
+        "parameters": _schema({
+            "name": {"type": "string", "description": "Full name, e.g. Ana Lopez."},
+            "email": {"type": "string"},
+            "phone": {"type": "string", "description": "Include the country code, e.g. +31 6 1234 5678."},
+            "organization": {"type": "string"},
+            "title": {"type": "string", "description": "Job title."},
+        }, ["name"]),
     },
     {
         "name": "google_meeting_brief",
@@ -513,7 +592,6 @@ SCHEMAS: list[dict] = [
         "parameters": _schema({
             "query": {"type": "string", "description": "Extra Gmail terms. Default invoices/receipts."},
             "spreadsheet_id": {"type": "string", "description": "Target sheet. Omit to create one."},
-            "range": {"type": "string", "description": "Anchor range. Default Invoices!A1."},
             "days": {"type": "integer", "description": "Look-back window, 1-365. Default 45."},
             "max_results": {"type": "integer", "description": "Emails to inspect, 1-50. Default 15."},
             "confirm": {"type": "boolean", "description": "Write the rows."},
@@ -542,8 +620,11 @@ _HANDLERS: dict[str, Callable[[dict], dict]] = {
     "google_gmail_read": _h_gmail_read,
     "google_gmail_send": _h_gmail_send,
     "google_gmail_draft": _h_gmail_draft,
+    "google_gmail_modify": _h_gmail_modify,
     "google_calendar_agenda": _h_calendar_agenda,
     "google_calendar_create_event": _h_calendar_create_event,
+    "google_calendar_check_availability": _h_calendar_check_availability,
+    "google_sheets_create": _h_sheets_create,
     "google_drive_search": _h_drive_search,
     "google_drive_create_folder": _h_drive_create_folder,
     "google_drive_move": _h_drive_move,
@@ -553,6 +634,7 @@ _HANDLERS: dict[str, Callable[[dict], dict]] = {
     "google_sheets_read": _h_sheets_read,
     "google_sheets_append": _h_sheets_append,
     "google_contacts_search": _h_contacts_search,
+    "google_contacts_create": _h_contacts_create,
     "google_meeting_brief": _h_meeting_brief,
     "google_email_to_event": _h_email_to_event,
     "google_invoices_to_sheet": _h_invoices_to_sheet,
@@ -565,6 +647,9 @@ _EMOJI = {
     "google_gmail_read": "📬",
     "google_gmail_send": "📤",
     "google_gmail_draft": "📝",
+    "google_gmail_modify": "🏷️",
+    "google_calendar_check_availability": "🕓",
+    "google_sheets_create": "📊",
     "google_calendar_agenda": "📅",
     "google_calendar_create_event": "🗓️",
     "google_drive_search": "📁",
@@ -576,6 +661,7 @@ _EMOJI = {
     "google_sheets_read": "📊",
     "google_sheets_append": "🧾",
     "google_contacts_search": "👤",
+    "google_contacts_create": "➕",
     "google_meeting_brief": "🤝",
     "google_email_to_event": "📨",
     "google_invoices_to_sheet": "🧾",

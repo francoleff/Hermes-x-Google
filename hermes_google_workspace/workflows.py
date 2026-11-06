@@ -30,11 +30,6 @@ _MONTHS = {
 }
 
 
-def _local_tz():
-    """The host's zone: a local desktop install runs in the user's timezone."""
-    return datetime.now().astimezone().tzinfo or timezone.utc
-
-
 def _keywords(text: str, limit: int = 4) -> list[str]:
     words = re.findall(r"[A-Za-z][A-Za-z0-9&+-]{2,}", text or "")
     picked: list[str] = []
@@ -55,7 +50,7 @@ def _parse_when(text: str, reference: datetime) -> Optional[datetime]:
     iso = re.search(r"\b(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})", body)
     if iso:
         year, month, day, hour, minute = (int(group) for group in iso.groups())
-        return datetime(year, month, day, hour, minute, tzinfo=_local_tz())
+        return services.localize(datetime(year, month, day, hour, minute))
 
     day_first = re.search(
         r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + "|".join(_MONTHS) + r")\.?\s*(\d{4})?"
@@ -93,19 +88,19 @@ def _parse_when(text: str, reference: datetime) -> Optional[datetime]:
         if suffix == "am" and hour == 12:
             hour = 0
     try:
-        parsed = datetime(year, month, int(day), hour, minute, tzinfo=_local_tz())
+        parsed = datetime(year, month, int(day), hour, minute)
     except ValueError:
         return None
-    if not year_text and parsed < reference - timedelta(days=1):
+    if not year_text and parsed < reference.replace(tzinfo=None) - timedelta(days=1):
         parsed = parsed.replace(year=year + 1)
-    return parsed
+    return services.localize(parsed)
 
 
 def _next_business_day(reference: datetime) -> datetime:
-    candidate = reference + timedelta(days=1)
+    candidate = reference.replace(tzinfo=None) + timedelta(days=1)
     while candidate.weekday() >= 5:
         candidate += timedelta(days=1)
-    return candidate.replace(hour=10, minute=0, second=0, microsecond=0)
+    return services.localize(candidate.replace(hour=10, minute=0, second=0, microsecond=0))
 
 
 # ── Meeting brief ────────────────────────────────────────────────────────────
@@ -335,10 +330,10 @@ def email_to_event_proposal(message_id: str, duration_minutes: int = 60) -> dict
     body = message.get("body") or message.get("snippet") or ""
     received = message.get("received") or ""
 
-    reference = datetime.now(_local_tz())
+    reference = datetime.now().astimezone()
     if received:
         try:
-            reference = datetime.fromisoformat(received.replace("Z", "+00:00")).astimezone(_local_tz())
+            reference = datetime.fromisoformat(received.replace("Z", "+00:00")).astimezone()
         except ValueError:
             pass
 
@@ -363,6 +358,17 @@ def email_to_event_proposal(message_id: str, duration_minutes: int = 60) -> dict
         if address and address.lower() != me and address.lower() not in [a.lower() for a in attendees]:
             attendees.append(address)
 
+    duration = max(5, min(480, int(duration_minutes or 60)))
+    conflicts: list[dict] = []
+    conflict_check: dict[str, Any] = {"ok": True}
+    try:
+        conflicts = services.calendar_conflicts(proposed, proposed + timedelta(minutes=duration))
+    except WorkspaceError as exc:  # a missing calendar grant must not hide the rest of the proposal
+        conflict_check = {"ok": False, "error": exc.as_dict()}
+    if conflicts:
+        count = len(conflicts)
+        note = f"{note} It overlaps {count} event{'s' if count != 1 else ''} on your calendar."
+
     return {
         "source": {
             "messageId": message.get("id"),
@@ -383,6 +389,8 @@ def email_to_event_proposal(message_id: str, duration_minutes: int = 60) -> dict
         },
         "certainty": certainty,
         "note": note,
+        "conflicts": conflicts,
+        "conflictCheck": conflict_check,
     }
 
 
@@ -411,7 +419,7 @@ def email_to_event(message_id: str, *, start: str = "", duration_minutes: int = 
 # ── Invoices → Sheets ────────────────────────────────────────────────────────
 
 _AMOUNT = re.compile(
-    r"(?:total|amount|due|balance|totaal|montant|importe)[^0-9]{0,24}"
+    r"(?:total|amount|due|balance|totaal|montant|importe)[^0-9]{0,24}?"
     r"(?P<currency>USD|EUR|GBP|NAD|ZAR|\$|€|£)?\s?"
     r"(?P<amount>\d{1,3}(?:[ ,.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)",
     re.IGNORECASE,
@@ -422,28 +430,40 @@ _ANY_AMOUNT = re.compile(
 )
 
 
+def _normalize_amount(raw: str) -> float:
+    """Read 1.234,56 and 1,234.56 (both mean one thousand two hundred thirty-four and 56 cents) and 99.50."""
+    text = raw.replace(" ", "")
+    if "," in text and "." in text:
+        # The separator that comes last is the decimal mark; the other one groups thousands.
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif text.count(",") == 1 and len(text.split(",")[1]) == 2:
+        text = text.replace(",", ".")
+    elif text.count(".") == 1 and len(text.split(".")[1]) == 2:
+        pass
+    else:
+        text = text.replace(",", "").replace(".", "")
+    return float(text)
+
+
 def _parse_amount(*texts: str) -> tuple[str, str]:
     for text in texts:
         for pattern in (_AMOUNT, _ANY_AMOUNT):
             match = pattern.search(text or "")
             if match:
                 currency = (match.group("currency") or "").strip()
-                raw = match.group("amount").replace(" ", "")
-                if raw.count(",") == 1 and raw.count(".") == 0:
-                    raw = raw.replace(",", ".")
-                else:
-                    raw = raw.replace(",", "")
                 try:
-                    value = float(raw)
+                    value = _normalize_amount(match.group("amount"))
                 except ValueError:
                     continue
                 return currency, f"{value:.2f}"
     return "", ""
 
 
-def invoices_to_sheet(*, spreadsheet_id: str = "", cell_range: str = "Invoices!A1",
-                      query: str = "", days: int = 45, max_results: int = 15,
-                      confirm: bool = False) -> dict:
+def invoices_to_sheet(*, spreadsheet_id: str = "", query: str = "", days: int = 45,
+                      max_results: int = 15, confirm: bool = False) -> dict:
     window = max(1, min(365, int(days or 45)))
     limit = max(1, min(50, int(max_results or 15)))
     terms = query.strip() or "invoice OR receipt OR factuur OR bill"
@@ -494,16 +514,26 @@ def invoices_to_sheet(*, spreadsheet_id: str = "", cell_range: str = "Invoices!A
         created = services.sheets_create("Invoices (Hermes)", "Invoices")
         target = created["id"]
         result["spreadsheet"] = created
-        cell_range = "Invoices!A1"
 
     meta = services.sheets_meta(target)
     sheet_title = (meta.get("sheets") or [{}])[0].get("title", "Sheet1")
-    existing = services.sheets_read(target, f"{sheet_title}!A1:G1")
-    header_missing = not (existing.get("values") or [])
-    payload_rows = ([result["columns"]] if header_missing else []) + rows
-    cell_range = f"{sheet_title}!A1"
+    existing = services.sheets_read(target, f"{sheet_title}!A1:G5000")
+    values = existing.get("values") or []
+    header_missing = not values
+    # Running this twice must not write the same invoice twice. An invoice is already recorded
+    # when a row in the sheet has the same message link and attachment name.
+    recorded = {
+        (str(row[6]) if len(row) > 6 else "", str(row[5]) if len(row) > 5 else "")
+        for row in values[1:]
+    }
+    fresh = [row for row in rows if (row[6], row[5]) not in recorded]
+    result["skipped"] = len(rows) - len(fresh)
+    if not fresh:
+        result["note"] = "Those invoices are already in the sheet. Nothing was added."
+        return result
 
-    appended = services.sheets_append(target, payload_rows, cell_range)
+    payload_rows = ([result["columns"]] if header_missing else []) + fresh
+    appended = services.sheets_append(target, payload_rows, f"{sheet_title}!A1")
     result["spreadsheet"] = result.get("spreadsheet") or {"id": target, "title": meta.get("title", "")}
     result["appended"] = appended
     result["created"] = True

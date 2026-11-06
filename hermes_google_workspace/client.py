@@ -163,6 +163,18 @@ def _google_reason(payload: Any) -> tuple[str, str]:
     return message, reason
 
 
+_SCOPE_REASONS = frozenset({"insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT"})
+
+
+def _is_scope_failure(reason: str, lowered: str) -> bool:
+    """True when the grant lacks a scope, as opposed to the user lacking access to one item."""
+    return (
+        reason in _SCOPE_REASONS
+        or "insufficient authentication scopes" in lowered
+        or "access_token_scope_insufficient" in lowered
+    )
+
+
 def _raise_http(status: int, payload: Any, text: str, url: str) -> None:
     message, reason = _google_reason(payload)
     if not message:
@@ -176,13 +188,7 @@ def _raise_http(status: int, payload: Any, text: str, url: str) -> None:
             status=status,
             hint=SIGN_IN_COMMAND,
         )
-    if status == 403 and (
-        "insufficient" in lowered
-        or "scope" in lowered
-        or "permission" in lowered
-        or "forbidden" in lowered
-        or "access" in lowered
-    ):
+    if status == 403 and _is_scope_failure(reason, lowered):
         scope = _scope_hint(url)
         raise WorkspaceError(
             "scope_missing",
@@ -244,14 +250,18 @@ def _send(method: str, url: str, body: Any, timeout: float):
     except ValueError as exc:
         raise WorkspaceError("configuration", str(exc)) from None
     except Exception as exc:  # httpx errors are re-raised detached by Hermes
-        name = type(exc).__name__
-        if name.startswith("HTTP"):
+        if _is_transport_error(exc):
             raise WorkspaceError(
                 "network",
-                f"Could not reach Google ({name}).",
+                f"Could not reach Google ({type(exc).__name__}).",
                 hint="Check the network connection and retry.",
             ) from None
         raise
+
+
+def _is_transport_error(exc: BaseException) -> bool:
+    """httpx raises its own classes for refused connections, timeouts and protocol failures."""
+    return type(exc).__module__.split(".")[0] == "httpx"
 
 
 def _backoff(attempt: int, response=None) -> float:

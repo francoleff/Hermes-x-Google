@@ -11,7 +11,6 @@ independent of the human clicking the button, so a stray request cannot send mai
 
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import time
@@ -176,6 +175,23 @@ def _service_rows() -> list[dict]:
     return rows
 
 
+def _credential_configured(name: str) -> bool:
+    """Whether a declared variable is set for this profile. Never returns its value.
+
+    Reads go through Hermes's profile-scoped resolver, so one profile can never report another
+    profile's credentials. Outside a Hermes process, or on an unscoped multiplexed read, the answer
+    is "not configured" rather than a guess.
+    """
+    try:
+        from agent.secret_scope import get_secret
+    except ImportError:
+        return False
+    try:
+        return bool(get_secret(name))
+    except Exception:
+        return False
+
+
 @router.get("/status")
 def status() -> dict:
     rows = _run(_service_rows, ("status",))
@@ -184,8 +200,8 @@ def status() -> dict:
     account = next(
         (row["detail"] for row in rows if row["id"] == "gmail" and row["state"] == "ready"), ""
     )
-    credential_env = bool(os.environ.get("GOOGLE_WORKSPACE_CLIENT_ID")) and bool(
-        os.environ.get("GOOGLE_WORKSPACE_CLIENT_SECRET")
+    credential_env = _credential_configured("GOOGLE_WORKSPACE_CLIENT_ID") and _credential_configured(
+        "GOOGLE_WORKSPACE_CLIENT_SECRET"
     )
     return _envelope({
         "connected": connected,
@@ -290,6 +306,24 @@ def contacts(query: str = Query(""), max_results: int = Query(40, ge=1, le=100))
     if query:
         return _envelope(_run(lambda: services.contacts_search(query, max_results), key))
     return _envelope(_run(lambda: services.contacts_list(max_results), key))
+
+
+@router.post("/contacts")
+def create_contact(payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "create a Google contact")
+    try:
+        contact = services.contacts_create(
+            name=str(body.get("name") or ""),
+            email=str(body.get("email") or ""),
+            phone=str(body.get("phone") or ""),
+            organization=str(body.get("organization") or ""),
+            title=str(body.get("title") or ""),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(contact)
 
 
 @router.get("/search")
@@ -420,7 +454,6 @@ def invoices_append(payload: dict = Body(...)) -> dict:
     try:
         result = workflows.invoices_to_sheet(
             spreadsheet_id=str(body.get("spreadsheetId") or ""),
-            cell_range=str(body.get("range") or "Invoices!A1"),
             query=str(body.get("query") or ""),
             days=client.clamp(body.get("days"), 1, 365, 45),
             max_results=client.clamp(body.get("maxResults"), 1, 50, 15),
@@ -553,3 +586,45 @@ def save_brief(payload: dict = Body(...)) -> dict:
         raise _http(exc) from None
     _invalidate()
     return _envelope({"document": document, "brief": brief_data})
+
+
+@router.post("/gmail/{message_id}/modify")
+def gmail_modify(message_id: str, payload: dict = Body(...)) -> dict:
+    """Mark read or unread, star or unstar, or archive. Reversible and silent, so no confirmation step."""
+    body = _body(payload)
+    try:
+        result = services.gmail_modify(message_id, str(body.get("action") or ""))
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/sheets/{spreadsheet_id}/append")
+def sheets_append(spreadsheet_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "append rows to a Google Sheet")
+    try:
+        result = services.sheets_append(
+            spreadsheet_id,
+            services.clean_rows(body.get("rows")),
+            str(body.get("range") or "A1"),
+        )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.get("/calendar/availability")
+def availability(
+    start: str = Query(..., min_length=1),
+    end: str = Query(..., min_length=1),
+    timezone_name: str = Query("", alias="timezone"),
+) -> dict:
+    return _envelope(
+        _run(
+            lambda: services.calendar_availability(start, end, timezone_name),
+            ("availability", start, end, timezone_name),
+        )
+    )

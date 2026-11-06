@@ -9,20 +9,26 @@ from __future__ import annotations
 
 import base64
 import re
-from datetime import date, datetime, time as dtime, timedelta, timezone
+from datetime import date, datetime, time as dtime, timedelta, timezone, tzinfo
 from email.message import EmailMessage
 from email.utils import getaddresses
 from html.parser import HTMLParser
 from typing import Any, Iterable, Optional
 from urllib.parse import quote
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import client
 from .client import WorkspaceError, get, patch, post
 
 MAX_TEXT = 20_000
+MAX_APPEND_ROWS = 500
 
 
 # ── Time helpers ─────────────────────────────────────────────────────────────
+#
+# Naive date/times from the agent or the UI mean the *user's* wall clock. They are never read as
+# UTC. Without an explicit IANA zone the host's own rules apply to that exact date, so daylight
+# saving is handled correctly for events in either half of the year.
 
 
 def now_utc() -> datetime:
@@ -35,25 +41,45 @@ def rfc3339(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def parse_time(value: str) -> datetime:
-    """Parse an ISO date or datetime into an aware datetime (UTC when no zone)."""
+def _zone(tz_name: str) -> tzinfo:
+    try:
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise WorkspaceError(
+            "bad_request",
+            f"Unknown timezone {tz_name!r}.",
+            hint="Use an IANA name such as Europe/Amsterdam or America/New_York.",
+        ) from None
+
+
+def localize(naive: datetime, tz_name: str = "") -> datetime:
+    """Attach the zone a person means: an explicit IANA name, else the host's rules for that date."""
+    if naive.tzinfo is not None:
+        return naive
+    if tz_name:
+        return naive.replace(tzinfo=_zone(tz_name))
+    return naive.astimezone()
+
+
+def parse_time(value: str, tz_name: str = "") -> datetime:
+    """Parse an ISO date or datetime into an aware datetime. Naive input is local time."""
     text = str(value or "").strip()
     if not text:
         raise WorkspaceError("bad_request", "A date or time is required.")
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        # Python 3.11+ also accepts a bare date in fromisoformat, which would give midnight, so try
+        # the date-only form first: a bare date means 09:00 that day.
+        parsed = datetime.combine(date.fromisoformat(text), dtime(9, 0))
     except ValueError:
         try:
-            parsed = datetime.combine(date.fromisoformat(text), dtime(9, 0))
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
         except ValueError:
             raise WorkspaceError(
                 "bad_request",
                 f"Could not read the date/time {text!r}.",
                 hint="Use ISO 8601, for example 2026-11-12T15:00:00+02:00.",
             ) from None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
+    return localize(parsed, tz_name)
 
 
 def _truncate(text: str, limit: int = MAX_TEXT) -> str:
@@ -344,6 +370,43 @@ def gmail_draft(*, to: str, subject: str, body: str, cc: str = "", bcc: str = ""
     }
 
 
+# action -> (labels to add, labels to remove). Each is reversible and notifies nobody.
+_MODIFY_ACTIONS: dict[str, tuple[list[str], list[str]]] = {
+    "mark_read": ([], ["UNREAD"]),
+    "mark_unread": (["UNREAD"], []),
+    "star": (["STARRED"], []),
+    "unstar": ([], ["STARRED"]),
+    "archive": ([], ["INBOX"]),
+}
+
+
+def gmail_modify(message_id: str, action: str) -> dict:
+    """Read, star or archive one message. Returns the message's resulting label state."""
+    if action not in _MODIFY_ACTIONS:
+        raise WorkspaceError(
+            "bad_request",
+            f"Unknown action {action!r}.",
+            hint="Use one of: " + ", ".join(sorted(_MODIFY_ACTIONS)) + ".",
+        )
+    add, remove = _MODIFY_ACTIONS[action]
+    body: dict[str, Any] = {}
+    if add:
+        body["addLabelIds"] = add
+    if remove:
+        body["removeLabelIds"] = remove
+    payload, _ = post(f"{client.GMAIL_ROOT}/messages/{quote(str(message_id), safe='')}/modify", body)
+    labels = list((payload or {}).get("labelIds") or [])
+    return {
+        "id": (payload or {}).get("id") or message_id,
+        "threadId": (payload or {}).get("threadId", ""),
+        "action": action,
+        "labels": labels,
+        "unread": "UNREAD" in labels,
+        "starred": "STARRED" in labels,
+        "inInbox": "INBOX" in labels,
+    }
+
+
 def message_addresses(message: dict) -> list[dict]:
     """Every From/To/Cc address in a parsed message, as {name, email}."""
     seen: dict[str, dict] = {}
@@ -444,10 +507,48 @@ def calendar_get_event(event_id: str, calendar_id: str = "primary") -> dict:
     return _event_summary(payload)
 
 
-def _event_time(value: str, *, all_day: bool) -> dict:
+def _user_declined(event: dict) -> bool:
+    return any(person.get("self") and person.get("response") == "declined" for person in event["attendees"])
+
+
+def calendar_conflicts(start: datetime, end: datetime, calendar_id: str = "primary") -> list[dict]:
+    """Events on the calendar that overlap [start, end). Cancelled and declined events never conflict."""
+    if end <= start:
+        raise WorkspaceError("bad_request", "The window must end after it starts.")
+    payload, _ = get(
+        _calendar_url(calendar_id),
+        params={
+            "timeMin": rfc3339(start),
+            "timeMax": rfc3339(end),
+            "singleEvents": True,
+            "orderBy": "startTime",
+            "maxResults": 25,
+        },
+    )
+    events = [_event_summary(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
+    return [event for event in events if event["status"] != "cancelled" and not _user_declined(event)]
+
+
+def calendar_availability(start: str, end: str, tz_name: str = "") -> dict:
+    """Whether a window is free on the primary calendar, with the events that block it."""
+    window_start = parse_time(start, tz_name)
+    window_end = parse_time(end, tz_name)
+    if window_end <= window_start:
+        raise WorkspaceError("bad_request", "The window must end after it starts.")
+    conflicts = calendar_conflicts(window_start, window_end)
+    return {
+        "free": not conflicts,
+        "from": window_start.isoformat(timespec="minutes"),
+        "to": window_end.isoformat(timespec="minutes"),
+        "conflicts": conflicts,
+    }
+
+
+def _event_time(moment: datetime, *, all_day: bool) -> dict:
+    """An offset-bearing RFC 3339 time, so the event keeps the wall-clock time the user meant."""
     if all_day:
-        return {"date": value[:10]}
-    return {"dateTime": rfc3339(parse_time(value))}
+        return {"date": moment.date().isoformat()}
+    return {"dateTime": moment.isoformat(timespec="seconds")}
 
 
 def calendar_create_event(
@@ -467,23 +568,29 @@ def calendar_create_event(
 ) -> dict:
     if not str(summary or "").strip():
         raise WorkspaceError("bad_request", "An event title is required.")
-    starts = parse_time(start)
-    if end:
-        ends = parse_time(end)
+    starts = parse_time(start, timezone_name)
+    if all_day:
+        last_day = parse_time(end, timezone_name).date() if end else starts.date()
+        if last_day < starts.date():
+            raise WorkspaceError("bad_request", "The all-day event ends before it starts.")
+        ends = starts
     else:
-        ends = starts + timedelta(minutes=client.clamp(duration_minutes, 5, 1440, 30))
-    if ends <= starts:
-        raise WorkspaceError("bad_request", "The event end must be after its start.")
+        if end:
+            ends = parse_time(end, timezone_name)
+        else:
+            ends = starts + timedelta(minutes=client.clamp(duration_minutes, 5, 1440, 30))
+        if ends <= starts:
+            raise WorkspaceError("bad_request", "The event end must be after its start.")
 
     body: dict[str, Any] = {
         "summary": summary.strip(),
-        "start": _event_time(start, all_day=all_day),
-        "end": _event_time(end or rfc3339(ends), all_day=all_day),
+        "start": _event_time(starts, all_day=all_day),
+        "end": _event_time(ends, all_day=all_day),
     }
     if all_day:
         # Google treats an all-day end date as exclusive.
-        body["end"] = {"date": (ends.date() + timedelta(days=1)).isoformat()}
-    if timezone_name:
+        body["end"] = {"date": (last_day + timedelta(days=1)).isoformat()}
+    elif timezone_name:
         body["start"]["timeZone"] = timezone_name
         body["end"]["timeZone"] = timezone_name
     if description:
@@ -761,10 +868,23 @@ def sheets_read(spreadsheet_id: str, cell_range: str = "A1:Z100") -> dict:
     }
 
 
+def clean_rows(rows: Any) -> list[list[Any]]:
+    """Validate rows for a Sheets write: a non-empty list of lists, with None cells blanked."""
+    if not isinstance(rows, list) or not rows:
+        raise WorkspaceError("bad_request", "`rows` must be a non-empty list of rows.")
+    if len(rows) > MAX_APPEND_ROWS:
+        raise WorkspaceError("bad_request", f"At most {MAX_APPEND_ROWS} rows per call.")
+    cleaned: list[list[Any]] = []
+    for row in rows:
+        if not isinstance(row, (list, tuple)):
+            raise WorkspaceError("bad_request", "Every row must be a list of cell values.")
+        cleaned.append(["" if cell is None else cell for cell in row])
+    return cleaned
+
+
 def sheets_append(spreadsheet_id: str, rows: list, cell_range: str = "A1",
                   value_input_option: str = "USER_ENTERED") -> dict:
-    if not rows:
-        raise WorkspaceError("bad_request", "No rows to append.")
+    rows = clean_rows(rows)
     payload, _ = post(
         f"{client.SHEETS_ROOT}/{quote(str(spreadsheet_id), safe='')}/values/"
         f"{quote(cell_range, safe='')}:append",
@@ -875,3 +995,60 @@ def contacts_list(max_results: int = 25) -> dict:
         if isinstance(person, dict)
     ]
     return {"contacts": people, "count": len(people)}
+
+
+def _valid_email(value: str) -> bool:
+    """A pragmatic check: one @, a local part, and a dotted domain with no spaces."""
+    local, separator, domain = value.partition("@")
+    return bool(
+        separator
+        and local
+        and " " not in value
+        and "." in domain
+        and not domain.startswith(".")
+        and not domain.endswith(".")
+    )
+
+
+def _split_name(name: str) -> dict:
+    parts = name.split()
+    if len(parts) <= 1:
+        return {"givenName": parts[0] if parts else ""}
+    return {"givenName": parts[0], "familyName": " ".join(parts[1:])}
+
+
+def contacts_create(name: str, email: str = "", phone: str = "", organization: str = "",
+                    title: str = "") -> dict:
+    """Create one contact. Needs a name and at least one way to reach the person."""
+    clean_name = " ".join(str(name or "").split())
+    clean_email = str(email or "").strip()
+    clean_phone = str(phone or "").strip()
+    clean_org = str(organization or "").strip()
+    clean_title = str(title or "").strip()
+    if not clean_name:
+        raise WorkspaceError("bad_request", "A contact name is required.")
+    if not clean_email and not clean_phone:
+        raise WorkspaceError(
+            "bad_request",
+            "Add an email address or a phone number for the contact.",
+        )
+    if clean_email and not _valid_email(clean_email):
+        raise WorkspaceError("bad_request", f"{clean_email!r} is not a valid email address.")
+
+    body: dict[str, Any] = {"names": [_split_name(clean_name)]}
+    if clean_email:
+        body["emailAddresses"] = [{"value": clean_email}]
+    if clean_phone:
+        body["phoneNumbers"] = [{"value": clean_phone}]
+    organization_fields = {key: value for key, value in (("name", clean_org), ("title", clean_title)) if value}
+    if organization_fields:
+        body["organizations"] = [organization_fields]
+
+    created, _ = post(
+        f"{client.PEOPLE_ROOT}/people:createContact",
+        body,
+        params={"personFields": _PERSON_FIELDS},
+    )
+    summary = _person_summary(created or {})
+    summary["created"] = True
+    return summary

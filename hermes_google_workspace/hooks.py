@@ -25,6 +25,8 @@ _ALWAYS_APPROVE: dict[str, str] = {
     "google_calendar_create_event": "create a calendar event and notify attendees",
     "google_docs_create": "create a Google Doc in your Drive",
     "google_docs_append": "write into an existing Google Doc",
+    "google_sheets_create": "create a Google Sheet in your Drive",
+    "google_contacts_create": "add a contact to your Google contacts",
     "google_sheets_append": "append rows to a Google Sheet",
     "google_drive_create_folder": "create a folder in your Drive",
     "google_drive_move": "move a file in your Drive",
@@ -59,6 +61,10 @@ def _detail(tool_name: str, args: dict) -> str:
         return f"Title: {args.get('title') or '(untitled)'}"
     if tool_name == "google_docs_append":
         return f"Document: {args.get('document_id') or '(unset)'}"
+    if tool_name == "google_sheets_create":
+        return f"Title: {args.get('title') or '(untitled)'}"
+    if tool_name == "google_contacts_create":
+        return f"Name: {args.get('name') or '(unnamed)'}"
     if tool_name == "google_sheets_append":
         rows = args.get("rows") or []
         return f"Sheet: {args.get('spreadsheet_id') or '(unset)'}\nRows: {len(rows)}"

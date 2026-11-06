@@ -11,7 +11,7 @@
  */
 import {
   Badge, Button, Checkbox, Codicon, ConfirmDialog, Dialog, DialogContent,
-  DialogDescription, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState,
+  DialogDescription, DialogFooter, DialogHeader, DialogTitle,
   Input, SearchField, Separator, Skeleton, Textarea, useQuery, queryClient, host,
   ROUTES_AREA, SIDEBAR_NAV_AREA, PALETTE_AREA,
 } from '@hermes/plugin-sdk'
@@ -45,6 +45,7 @@ const TABS = [
   { id: 'Docs', label: 'Docs', icon: 'book' },
   { id: 'Sheets', label: 'Sheets', icon: 'table' },
   { id: 'Contacts', label: 'Contacts', icon: 'organization' },
+  { id: 'Settings', label: 'Settings', icon: 'settings-gear' },
 ]
 
 const SERVICE_ICONS = {
@@ -264,12 +265,6 @@ function eventDuration(event) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`
 }
 
-function sameDay(a, b) {
-  const left = asDate(a)
-  const right = asDate(b)
-  return !!left && !!right && left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
-}
-
 function groupEventsByDay(events) {
   const groups = []
   for (const event of events || []) {
@@ -370,7 +365,7 @@ function InlineError({ error, onRetry }) {
       jsxs('div', { style: { minWidth: 0, flex: 1 }, children: [
         jsx('div', { style: { fontSize: '0.78rem', fontWeight: 600 }, children: info.message }),
         info.hint ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-text-tertiary)', marginTop: '0.2rem', lineHeight: 1.45 }, children: info.hint }) : null,
-        info.code === 'not_connected' ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-text-tertiary)', marginTop: '0.3rem' }, children: 'Connect Google Workspace from the Overview tab first.' }) : null,
+        info.code === 'not_connected' ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-text-tertiary)', marginTop: '0.3rem' }, children: 'Reconnect: run the sign-in command shown in Settings, then press Check again.' }) : null,
       ] }),
       onRetry ? jsx(Button, { variant: 'outline', size: 'xs', onClick: onRetry, children: 'Retry' }) : null,
     ],
@@ -411,7 +406,7 @@ function Avatar({ name, email, size = '1.7rem' }) {
 }
 
 function StateDot({ state }) {
-  const color = state === 'ready' ? 'var(--ui-accent)' : state === 'needs_permission' ? '#d9a441' : state === 'error' ? 'var(--ui-red)' : 'var(--ui-text-quaternary)'
+  const color = state === 'ready' ? 'var(--ui-accent)' : state === 'needs_permission' ? 'var(--ui-yellow)' : state === 'error' ? 'var(--ui-red)' : 'var(--ui-text-quaternary)'
   return jsx('span', { style: { width: 7, height: 7, borderRadius: '999px', background: color, flexShrink: 0, boxShadow: `0 0 0 1px color-mix(in srgb, ${color} 35%, transparent)` } })
 }
 
@@ -544,7 +539,7 @@ function SetupView({ status, onRetry, retrying }) {
       ] }),
 
       jsxs('p', { style: { margin: 0, fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', lineHeight: 1.5 }, children: [
-        'Scopes requested: Gmail read/send/compose, Calendar events, Drive, Docs, Sheets, and Contacts read. Sign out any time with ',
+        'Access is limited to what the features need: Gmail (read, labels, send, drafts), Calendar events, Drive, Docs, Sheets, and Contacts (read and create). Sign out any time with ',
         jsx('code', { style: { fontFamily: 'var(--font-mono, ui-monospace, monospace)' }, children: setup.signOutCommand || 'hermes auth logout google-workspace:google' }),
         '.',
       ] }),
@@ -665,6 +660,52 @@ function WorkflowCard({ icon, title, detail, action, onClick }) {
   })
 }
 
+// One query across Gmail, Calendar and Drive. Each result says which service it came from.
+function GlobalSearch({ onOpenMessage, onOpenEvent, onOpenFile }) {
+  const [text, setText] = useState('')
+  const [query, setQuery] = useState('')
+  const result = useApi(`/search?query=${encodeURIComponent(query)}`, { enabled: !!query, extra: [query] })
+  const data = result.data || {}
+  const groups = [
+    { key: 'messages', service: 'Gmail', items: data.messages || [] },
+    { key: 'events', service: 'Calendar', items: data.events || [] },
+    { key: 'files', service: 'Drive', items: data.files || [] },
+  ]
+  const total = groups.reduce((sum, group) => sum + group.items.length, 0)
+  const submit = () => setQuery(text.trim())
+
+  function renderItem(group, item) {
+    if (group.key === 'messages') return jsx(MessageRow, { message: item, onClick: () => onOpenMessage(item.id) }, item.id)
+    if (group.key === 'events') return jsx(EventRow, { event: item, onClick: () => onOpenEvent(item), showDay: true }, item.id)
+    return jsx(FileRow, { file: item, onClick: () => onOpenFile(item) }, item.id)
+  }
+
+  return jsxs(Panel, { style: { padding: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+    jsxs('div', { style: { display: 'flex', gap: '0.35rem' }, children: [
+      jsx(SearchField, {
+        placeholder: 'Search Gmail, Calendar and Drive at once',
+        value: text,
+        onChange: setText,
+        onKeyDown: (event) => { if (event.key === 'Enter') submit() },
+        variant: 'box',
+        'aria-label': 'Search across Google Workspace',
+      }),
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: submit, disabled: !text.trim(), children: 'Search' }),
+    ] }),
+    !query ? null
+      : result.isPending ? jsx(LoadingBlock, { label: `Searching for “${query}”…`, rows: 3 })
+      : result.isError ? jsx(InlineError, { error: result.error, onRetry: result.refetch })
+      : jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+        total === 0 ? jsx(EmptyBlock, { icon: 'search', title: 'Nothing matched', description: `No Gmail, Calendar or Drive item matched “${query}”.` }) : null,
+        ...groups.filter((group) => group.items.length).map((group) => jsxs('div', { children: [
+          jsx(SectionHeading, { title: group.service, detail: plural(group.items.length, 'result') }),
+          jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: group.items.map((item) => renderItem(group, item)) }),
+        ] }, group.key)),
+        ...Object.entries(data.errors || {}).map(([key, error]) => jsx(InlineError, { error }, key)),
+      ] }),
+  ] })
+}
+
 function OverviewTab({ status, overview, onOpenMessage, onOpenEvent, onOpenFile, onCompose, onEvent, onBrief, onOrganize, onInvoices }) {
   const data = overview.data || {}
   const errors = data.errors || {}
@@ -679,6 +720,8 @@ function OverviewTab({ status, overview, onOpenMessage, onOpenEvent, onOpenFile,
         jsx(Button, { variant: 'ghost', size: 'sm', onClick: onEvent, children: 'New event' }),
       ],
     }),
+
+    jsx(GlobalSearch, { onOpenMessage, onOpenEvent, onOpenFile }),
 
     overview.isPending ? jsx(LoadingBlock, { label: 'Gathering unread mail, today’s agenda, and recent files…', rows: 4 })
       : overview.isError ? jsx(InlineError, { error: overview.error, onRetry: overview.refetch })
@@ -813,6 +856,25 @@ function GmailTab({ selectedId, onSelect, onCompose, onEmailToEvent, narrow }) {
 }
 
 function MessageDetail({ message, onCompose, onEmailToEvent, onSelect }) {
+  const [busy, setBusy] = useState('')
+  const labels = message.labels || []
+  const starred = labels.includes('STARRED')
+  const inInbox = labels.includes('INBOX')
+
+  // Reversible label changes. They notify nobody, so they run without an approval step.
+  async function modify(action) {
+    setBusy(action)
+    try {
+      await post(`/gmail/${encodeURIComponent(message.id)}/modify`, { action })
+      refreshEverything()
+      if (action === 'archive') onSelect(null)
+    } catch (err) {
+      host.notify({ kind: 'error', message: errorInfo(err, 'Could not change that message.').message })
+    } finally {
+      setBusy('')
+    }
+  }
+
   const replyTo = senderEmail(message.from)
   const replySubject = /^re:/i.test(message.subject) ? message.subject : `Re: ${message.subject}`
   const recipients = [message.to, message.cc].filter(Boolean).join(', ')
@@ -842,6 +904,12 @@ function MessageDetail({ message, onCompose, onEmailToEvent, onSelect }) {
       jsx(Button, { variant: 'default', size: 'sm', onClick: () => onCompose({ to: replyTo, subject: replySubject, threadId: message.threadId, inReplyTo: message.messageIdHeader || '', body: `\n\nOn ${fmtDateTime(message.received || message.date)}, ${senderName(message.from)} wrote:\n${(message.body || '').split('\n').map((line) => `> ${line}`).join('\n')}` }), children: 'Reply' }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: () => onCompose({ subject: `Fwd: ${message.subject}`, body: `\n\n---------- Forwarded message ----------\nFrom: ${message.from}\nDate: ${message.date}\nSubject: ${message.subject}\n\n${message.body || ''}` }), children: 'Forward' }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: () => onEmailToEvent(message), children: 'Create event' }),
+    ] }),
+
+    jsxs('div', { style: { display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginTop: '-0.5rem' }, children: [
+      jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'mark_read' || busy === 'mark_unread', onClick: () => modify(message.unread ? 'mark_read' : 'mark_unread'), children: message.unread ? 'Mark as read' : 'Mark as unread' }),
+      jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'star' || busy === 'unstar', onClick: () => modify(starred ? 'unstar' : 'star'), children: starred ? 'Unstar' : 'Star' }),
+      inInbox ? jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'archive', onClick: () => modify('archive'), children: 'Archive' }) : null,
     ] }),
 
     jsx(Separator, {}),
@@ -1052,7 +1120,7 @@ function EmailToEventDialog({ message, onClose }) {
               jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-tertiary)', marginTop: '0.15rem' }, children: data?.source?.from || message.from }),
             ] }),
 
-            jsx('div', { style: { display: 'flex', gap: '0.45rem', alignItems: 'center', fontSize: '0.71rem', color: data?.certainty === 'parsed' ? 'var(--ui-accent)' : '#d9a441' }, children: [
+            jsx('div', { style: { display: 'flex', gap: '0.45rem', alignItems: 'center', fontSize: '0.71rem', color: data?.certainty === 'parsed' ? 'var(--ui-accent)' : 'var(--ui-yellow)' }, children: [
               jsx(Icon, { name: data?.certainty === 'parsed' ? 'check' : 'warning', size: '0.75rem' }),
               jsx('span', { children: data?.note || '' }),
             ] }),
@@ -1102,7 +1170,7 @@ function EmailToEventDialog({ message, onClose }) {
 const RESPONSE_STYLE = {
   accepted: { color: 'var(--ui-accent)', label: 'Accepted' },
   declined: { color: 'var(--ui-red)', label: 'Declined' },
-  tentative: { color: '#d9a441', label: 'Maybe' },
+  tentative: { color: 'var(--ui-yellow)', label: 'Maybe' },
   needsAction: { color: 'var(--ui-text-quaternary)', label: 'No reply' },
 }
 
@@ -1157,14 +1225,14 @@ function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow }) {
         ] }) : null,
 
         showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
-          ? jsx(EventDetail, { event: selected, onBrief, onCreateEvent, onClose: narrow ? () => onSelect(null) : null, narrow })
+          ? jsx(EventDetail, { event: selected, onBrief, onCreateEvent, onClose: narrow ? () => onSelect(null) : null })
           : jsx(EmptyBlock, { icon: 'calendar', title: 'Pick a meeting', description: 'Choose an event to see guests, the agenda, and a briefing built from your mail and files.' }) }) : null,
       ],
     }),
   ] })
 }
 
-function EventDetail({ event, onBrief, onCreateEvent, onClose, narrow }) {
+function EventDetail({ event, onBrief, onCreateEvent, onClose }) {
   const description = String(event.description || '').trim()
   const attendees = event.attendees || []
   const response = (person) => RESPONSE_STYLE[person.response] || { color: 'var(--ui-text-quaternary)', label: person.response || 'Guest' }
@@ -1237,6 +1305,12 @@ function EventDialog({ onClose }) {
   const guestList = attendees.split(/[;,]/).map((value) => value.trim()).filter(Boolean)
   const localStart = isoFromLocal(start)
   const ready = !!summary.trim() && !!localStart
+  // Read-only. Shows clashes while the user is still choosing a time.
+  const endIso = localStart ? new Date(new Date(localStart).getTime() + (Number(duration) || 30) * 60_000).toISOString() : ''
+  const availability = useApi(
+    `/calendar/availability?start=${encodeURIComponent(localStart)}&end=${encodeURIComponent(endIso)}`,
+    { enabled: !!localStart && !created, extra: [localStart, endIso] },
+  )
 
   async function create() {
     try {
@@ -1281,6 +1355,12 @@ function EventDialog({ onClose }) {
             jsx(Field, { label: 'Starts', children: jsx(Input, { type: 'datetime-local', value: start, onChange: (event) => setStart(event.target.value) }) }),
             jsx(Field, { label: 'Minutes', children: jsx(Input, { type: 'number', min: 5, max: 480, step: 5, value: duration, onChange: (event) => setDuration(event.target.value) }) }),
           ] }),
+          availability.data ? jsxs('div', { role: 'status', style: { display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', color: availability.data.free ? 'var(--ui-accent)' : 'var(--ui-yellow)' }, children: [
+            jsx(Icon, { name: availability.data.free ? 'check' : 'warning', size: '0.75rem' }),
+            jsx('span', { children: availability.data.free
+              ? 'Free at that time.'
+              : `Overlaps ${plural((availability.data.conflicts || []).length, 'event')}: ${(availability.data.conflicts || []).map((event) => event.summary).join(', ')}` }),
+          ] }) : null,
           jsx(Field, { label: 'Location', hint: 'Optional. A street address or a room name.', children: jsx(Input, { value: location, onChange: (event) => setLocation(event.target.value), placeholder: 'Boardroom, or a video link', style: inputStyle }) }),
           jsx(Field, {
             label: 'Guests',
@@ -1323,20 +1403,6 @@ function EventDialog({ onClose }) {
 }
 
 // ── Meeting brief ────────────────────────────────────────────────────────────
-
-function BriefSection({ icon, title, count, children, empty }) {
-  const items = Array.isArray(children) ? children : null
-  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.4rem' }, children: [
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.4rem' }, children: [
-      jsx(Icon, { name: icon, size: '0.78rem', color: 'var(--ui-text-quaternary)' }),
-      jsx('h4', { style: { margin: 0, fontSize: '0.77rem', fontWeight: 650 }, children: title }),
-      count ? jsx(Badge, { variant: 'muted', size: 'xs', children: count }) : null,
-    ] }),
-    items && !items.length
-      ? jsx('div', { style: { fontSize: '0.73rem', color: 'var(--ui-text-quaternary)', paddingLeft: '1.15rem' }, children: empty })
-      : jsx('div', { style: { paddingLeft: '1.15rem' }, children }),
-  ] })
-}
 
 function BriefDialog({ eventId, query, onClose, onOpenMessage, onOpenFile }) {
   const params = new URLSearchParams()
@@ -1719,7 +1785,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
   if (query) params.set('query', query)
   const listing = useApi(`/drive?${params.toString()}`, { extra: [query] })
   const docs = listing.data?.files || []
-  const current = selectedDoc && docs.find((file) => file.id === selectedDoc.id) ? selectedDoc : selectedDoc
+  const current = selectedDoc
   const reader = useApi(`/docs/${encodeURIComponent(current?.id || '')}`, { enabled: !!current?.id, extra: [current?.id] })
 
   const showList = !narrow || !current
@@ -1758,7 +1824,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
                   current.modified ? jsx(MetaLine, { icon: 'history', children: fmtRelative(current.modified) }) : null,
                 ] }),
               ] }),
-            ] },
+            ] }),
             jsxs('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: [
               jsx(Button, { variant: 'default', size: 'sm', onClick: () => setAppendOpen(true), disabled: !reader.data, children: 'Append text' }),
               jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(reader.data?.webUrl || current.webUrl), children: 'Open in Docs' }),
@@ -1772,9 +1838,12 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
           : jsx(EmptyBlock, { icon: 'book', title: 'Pick a document', description: 'Select a doc to read it here, or create a new one.' }) }) : null,
       ],
     }),
+    createOpen ? jsx(CreateDocDialog, {
+      onClose: () => setCreateOpen(false),
+      onCreated: (doc) => onSelect({ id: doc.id, name: doc.title, mimeType: MIME_DOC, webUrl: doc.webUrl }),
+    }) : null,
+    appendOpen && current ? jsx(AppendDocDialog, { doc: current, onClose: () => setAppendOpen(false) }) : null,
   ], })
-
-  function openCreate() { setCreateOpen(true) }
 }
 
 function CreateDocDialog({ onClose, onCreated }) {
@@ -1870,7 +1939,778 @@ function AppendDocDialog({ doc, onClose }) {
   ] })
 }
 
-// CHUNK_5
+// ── Sheets ───────────────────────────────────────────────────────────────────
 
+const SHEET_PREVIEW_RANGE = 'A1:H30'
+const MAX_SHEET_ROWS = 500
 
+function sheetUrl(id) {
+  return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(id || '')}/edit`
+}
 
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? '' : 's'}`
+}
+
+// One row per line. Cells are separated by tabs (what copying from a spreadsheet gives) or commas.
+function parseRows(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length)
+    .map((line) => (line.includes('\t') ? line.split('\t') : line.split(',')).map((cell) => cell.trim()))
+}
+
+function SheetGrid({ values }) {
+  if (!values.length) {
+    return jsx(EmptyBlock, {
+      icon: 'table',
+      title: 'This range is empty',
+      description: 'Add rows to fill it in. Nothing is written until you confirm.',
+    })
+  }
+  const width = Math.max(1, ...values.map((row) => row.length))
+  const cell = {
+    padding: '0.35rem 0.55rem',
+    borderBottom: '1px solid var(--ui-stroke-secondary)',
+    borderRight: '1px solid var(--ui-stroke-secondary)',
+    textAlign: 'left',
+    maxWidth: '14rem',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    verticalAlign: 'top',
+  }
+  return jsx('div', {
+    style: { ...insetStyle, overflow: 'auto', maxHeight: '26rem' },
+    children: jsxs('table', {
+      style: { borderCollapse: 'collapse', width: '100%', fontSize: '0.74rem' },
+      children: values.map((row, rowIndex) => jsxs('tr', {
+        children: Array.from({ length: width }, (_, column) => {
+          const header = rowIndex === 0
+          const value = row[column]
+          return jsx(header ? 'th' : 'td', {
+            style: {
+              ...cell,
+              fontWeight: header ? 600 : 400,
+              color: header ? 'var(--ui-text-primary)' : 'var(--ui-text-secondary)',
+              background: header ? 'var(--ui-bg-quaternary)' : 'transparent',
+            },
+            children: value === undefined || value === null ? '' : String(value),
+          }, column)
+        }),
+      }, rowIndex)),
+    }),
+  })
+}
+
+function SheetsTab({ selectedSheet, onSelect, narrow }) {
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [appendOpen, setAppendOpen] = useState(false)
+  const params = new URLSearchParams({ max_results: '40', mime_type: MIME_SHEET })
+  if (query) params.set('query', query)
+  const listing = useApi(`/drive?${params.toString()}`, { extra: [query] })
+  const sheets = listing.data?.files || []
+  const current = selectedSheet
+  const preview = useApi(
+    `/sheets/${encodeURIComponent(current?.id || '')}?range=${encodeURIComponent(SHEET_PREVIEW_RANGE)}`,
+    { enabled: !!current?.id, extra: [current?.id] },
+  )
+  const showList = !narrow || !current
+  const showDetail = !narrow || !!current
+
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.7rem', height: '100%', minHeight: 0 }, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }, children: [
+      jsxs('div', { style: { display: 'flex', gap: '0.35rem', flex: 1, minWidth: '13rem' }, children: [
+        jsx(SearchField, {
+          placeholder: 'Search your spreadsheets',
+          value: search,
+          onChange: setSearch,
+          onKeyDown: (event) => { if (event.key === 'Enter') setQuery(search.trim()) },
+          variant: 'box',
+          'aria-label': 'Search Google Sheets',
+        }),
+        jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setQuery(search.trim()), children: 'Search' }),
+      ] }),
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setCreateOpen(true), children: 'New sheet' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => listing.refetch(), children: 'Refresh' }),
+    ] }),
+
+    jsxs('div', {
+      style: { display: 'grid', gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : 'minmax(15rem, 21rem) minmax(0, 1fr)', gap: '0.7rem', flex: 1, minHeight: 0 },
+      children: [
+        showList ? jsx(Panel, { style: { overflow: 'auto', minHeight: 0, padding: '0.3rem' }, children: listing.isPending
+          ? jsx(LoadingBlock, { label: 'Listing spreadsheets…', rows: 6 })
+          : listing.isError ? jsx(InlineError, { error: listing.error, onRetry: listing.refetch })
+          : !sheets.length ? jsx(EmptyBlock, { icon: 'table', title: 'No spreadsheets found', description: query ? `Nothing matched “${query}”.` : 'Create one, or open a sheet from Drive.' })
+          : jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: sheets.map((file) => jsx('div', {
+            style: { borderRadius: '7px', background: current?.id === file.id ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent' },
+            children: jsx(FileRow, { file, onClick: () => onSelect(file) }),
+          }, file.id)) }) }) : null,
+
+        showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: current
+          ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '0.9rem 1rem 1.3rem' }, children: [
+            jsxs('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }, children: [
+              narrow ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: () => onSelect(null), children: 'Back' }) : null,
+              jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
+                jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 650, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: current.name }),
+                jsx('div', { style: { display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.3rem' }, children: [
+                  jsx(MetaLine, { icon: 'table', children: preview.data ? `${plural(preview.data.rows || 0, 'row')} in view` : 'Google Sheet' }),
+                  current.modified ? jsx(MetaLine, { icon: 'history', children: fmtRelative(current.modified) }) : null,
+                ] }),
+              ] }),
+            ] }),
+            jsxs('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: [
+              jsx(Button, { variant: 'default', size: 'sm', onClick: () => setAppendOpen(true), children: 'Add rows' }),
+              jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(current.webUrl || sheetUrl(current.id)), children: 'Open in Sheets' }),
+            ] }),
+            preview.isPending ? jsx(LoadingBlock, { label: 'Reading the sheet…', rows: 6 })
+              : preview.isError ? jsx(InlineError, { error: preview.error, onRetry: preview.refetch })
+              : jsx(SheetGrid, { values: preview.data?.values || [] }),
+            jsx('div', { style: { fontSize: '0.67rem', color: 'var(--ui-text-quaternary)' }, children: `Showing ${SHEET_PREVIEW_RANGE}. Open the sheet for everything else.` }),
+          ] })
+          : jsx(EmptyBlock, { icon: 'table', title: 'Pick a spreadsheet', description: 'Select one to preview its data here, or create a new one.' }) }) : null,
+      ],
+    }),
+    createOpen ? jsx(CreateSheetDialog, { onClose: () => setCreateOpen(false), onCreated: (sheet) => onSelect(sheet) }) : null,
+    appendOpen && current ? jsx(AppendSheetDialog, { sheet: current, onClose: () => setAppendOpen(false) }) : null,
+  ] })
+}
+
+function CreateSheetDialog({ onClose, onCreated }) {
+  const [title, setTitle] = useState('')
+  const [tabName, setTabName] = useState('Sheet1')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const cleanTitle = title.trim()
+  const cleanTab = tabName.trim() || 'Sheet1'
+
+  async function create() {
+    try {
+      const sheet = await post('/sheets', { title: cleanTitle, sheetTitle: cleanTab, confirm: true })
+      refreshEverything()
+      host.notify({ kind: 'success', message: 'Spreadsheet created in Drive.' })
+      onCreated?.({ id: sheet.id, name: sheet.title, mimeType: MIME_SHEET, webUrl: sheet.webUrl })
+      onClose()
+    } catch (err) {
+      throw new Error(errorInfo(err, 'Could not create the spreadsheet.').message)
+    }
+  }
+
+  return jsxs(Fragment, { children: [
+    jsx(Dialog, { open: true, onOpenChange: (open) => { if (!open) onClose() }, children: jsx(DialogContent, {
+      className: 'max-w-lg',
+      bodyClassName: 'gap-3',
+      children: jsxs(Fragment, { children: [
+        jsx(DialogHeader, { children: jsxs('div', { children: [
+          jsx(DialogTitle, { children: 'New spreadsheet' }),
+          jsx(DialogDescription, { children: 'Creates an empty sheet in your Drive. You confirm before it is created.' }),
+        ] }) }),
+        jsx(Field, { label: 'Title', children: jsx(Input, { value: title, onChange: (event) => setTitle(event.target.value), placeholder: 'Q4 invoices', autoFocus: true }) }),
+        jsx(Field, { label: 'First tab name', children: jsx(Input, { value: tabName, onChange: (event) => setTabName(event.target.value), placeholder: 'Sheet1' }) }),
+        jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.45rem' }, children: [
+          jsx(Button, { variant: 'outline', size: 'sm', onClick: onClose, children: 'Cancel' }),
+          jsx(Button, { variant: 'default', size: 'sm', onClick: () => setConfirmOpen(true), disabled: !cleanTitle, children: 'Create sheet' }),
+        ] }),
+      ] }),
+    }) }),
+    jsx(ConfirmDialog, {
+      open: confirmOpen,
+      onClose: () => setConfirmOpen(false),
+      onConfirm: create,
+      title: 'Create this spreadsheet?',
+      description: `“${cleanTitle}” is created in your Drive with its first tab named “${cleanTab}”.`,
+      confirmLabel: 'Create',
+      busyLabel: 'Creating…',
+      doneLabel: 'Created',
+    }),
+  ] })
+}
+
+function AppendSheetDialog({ sheet, onClose }) {
+  const [text, setText] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [done, setDone] = useState(null)
+  const rows = parseRows(text)
+  const overLimit = rows.length > MAX_SHEET_ROWS
+
+  async function append() {
+    try {
+      const result = await post(`/sheets/${encodeURIComponent(sheet.id)}/append`, { rows, range: 'A1', confirm: true })
+      setDone(result)
+      refreshEverything()
+      host.notify({ kind: 'success', message: 'Rows added to the spreadsheet.' })
+    } catch (err) {
+      throw new Error(errorInfo(err, 'Could not add the rows.').message)
+    }
+  }
+
+  return jsxs(Fragment, { children: [
+    jsx(Dialog, { open: true, onOpenChange: (open) => { if (!open) onClose() }, children: jsx(DialogContent, {
+      className: 'max-w-lg',
+      bodyClassName: 'gap-3',
+      children: done
+        ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.75rem' }, children: [
+          jsx(EmptyBlock, { icon: 'check', title: 'Rows added', description: `${plural(done.updatedRows || 0, 'row')} went into “${sheet.name}”.` }),
+          jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }, children: [
+            jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(done.webUrl || sheetUrl(sheet.id)), children: 'Open in Sheets' }),
+            jsx(Button, { variant: 'default', size: 'sm', onClick: onClose, children: 'Done' }),
+          ] }),
+        ] })
+        : jsxs(Fragment, { children: [
+          jsx(DialogHeader, { children: jsxs('div', { children: [
+            jsx(DialogTitle, { children: 'Add rows' }),
+            jsx(DialogDescription, { children: `${sheet.name}. Rows go after the last filled row. Existing cells are not changed.` }),
+          ] }) }),
+          jsx(Field, { label: 'Rows', hint: 'One row per line. Separate cells with tabs or commas.', children: jsx(Textarea, {
+            value: text,
+            onChange: (event) => setText(event.target.value),
+            placeholder: 'Acme\t1234.50\tEUR\n2026-11-02\tInvoice 42',
+            autoFocus: true,
+            style: { width: '100%', minHeight: '10rem', resize: 'vertical', lineHeight: 1.55, fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: '0.78rem' },
+          }) }),
+          overLimit ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-red)' }, children: `Add at most ${MAX_SHEET_ROWS} rows at a time.` }) : null,
+          jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.45rem' }, children: [
+            jsx(Button, { variant: 'outline', size: 'sm', onClick: onClose, children: 'Cancel' }),
+            jsx(Button, { variant: 'default', size: 'sm', onClick: () => setConfirmOpen(true), disabled: !rows.length || overLimit, children: rows.length ? `Review ${plural(rows.length, 'row')}` : 'Add rows' }),
+          ] }),
+        ] }),
+    }) }),
+    jsx(ConfirmDialog, {
+      open: confirmOpen,
+      onClose: () => setConfirmOpen(false),
+      onConfirm: append,
+      title: `Add ${plural(rows.length, 'row')} to “${sheet.name}”?`,
+      description: 'The rows are appended to the sheet. Formulas such as =SUM(B2:B9) are evaluated by Google Sheets.',
+      confirmLabel: 'Add rows',
+      busyLabel: 'Writing…',
+      doneLabel: 'Added',
+      children: jsx('div', { style: { ...insetStyle, padding: '0.6rem 0.7rem', fontSize: '0.74rem', maxHeight: '9rem', overflow: 'auto', whiteSpace: 'pre', fontFamily: 'var(--font-mono, ui-monospace, monospace)' }, children: rows.slice(0, 6).map((row) => row.join('  ·  ')).join('\n') + (rows.length > 6 ? `\n… and ${rows.length - 6} more` : '') }),
+    }),
+  ] })
+}
+
+// ── Contacts ─────────────────────────────────────────────────────────────────
+
+function ContactRow({ contact, selected, onClick }) {
+  const email = (contact.emails || [])[0] || ''
+  return jsxs('button', {
+    type: 'button',
+    onClick,
+    'aria-current': selected ? 'true' : undefined,
+    style: {
+      width: '100%', display: 'flex', gap: '0.65rem', alignItems: 'center', textAlign: 'left',
+      padding: '0.55rem 0.7rem', border: 0, borderRadius: '7px',
+      background: selected ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent',
+      color: 'inherit', font: 'inherit', cursor: 'pointer',
+    },
+    onMouseEnter: (event) => { if (!selected) event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
+    onMouseLeave: (event) => { if (!selected) event.currentTarget.style.background = 'transparent' },
+    children: [
+      jsx(Avatar, { name: contact.name, email, size: '1.6rem' }),
+      jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
+        jsx('div', { style: { fontSize: '0.78rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: contact.name || email || 'No name' }),
+        jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: [contact.organization, email].filter(Boolean).join(' · ') }),
+      ] }),
+    ],
+  })
+}
+
+function ContactDetail({ contact, onCompose, onClose }) {
+  const primary = (contact.emails || [])[0] || ''
+  const context = [contact.title, contact.organization].filter(Boolean).join(' · ')
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.9rem 1rem 1.2rem' }, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.6rem' }, children: [
+      onClose ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: onClose, children: 'Back' }) : null,
+      jsx(Avatar, { name: contact.name, email: primary, size: '2.3rem' }),
+      jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
+        jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 650, overflowWrap: 'anywhere' }, children: contact.name || 'No name' }),
+        context ? jsx('div', { style: { marginTop: '0.2rem', fontSize: '0.75rem', color: 'var(--ui-text-tertiary)' }, children: context }) : null,
+      ] }),
+    ] }),
+    primary ? jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children:
+      jsx(Button, { variant: 'default', size: 'sm', onClick: () => onCompose({ to: primary }), children: 'Write email' }) }) : null,
+    (contact.emails || []).length ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.4rem' }, children: [
+      jsx(SectionHeading, { title: 'Email' }),
+      ...contact.emails.map((email) => jsx(CopyRow, { text: email, label: 'Email' }, email)),
+    ] }) : null,
+    (contact.phones || []).length ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.4rem' }, children: [
+      jsx(SectionHeading, { title: 'Phone' }),
+      ...contact.phones.map((phone) => jsx(CopyRow, { text: phone, label: 'Phone number' }, phone)),
+    ] }) : null,
+  ] })
+}
+
+function ContactsTab({ selectedId, onSelect, onCompose, narrow }) {
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const params = new URLSearchParams({ max_results: '40' })
+  if (query) params.set('query', query)
+  const listing = useApi(`/contacts?${params.toString()}`, { extra: [query] })
+  const contacts = listing.data?.contacts || []
+  const selected = contacts.find((contact) => contact.resourceName === selectedId) || null
+  const showList = !narrow || !selectedId
+  const showDetail = !narrow || !!selectedId
+
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.7rem', height: '100%', minHeight: 0 }, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }, children: [
+      jsxs('div', { style: { display: 'flex', gap: '0.35rem', flex: 1, minWidth: '13rem' }, children: [
+        jsx(SearchField, {
+          placeholder: 'Search by name, email or phone',
+          value: search,
+          onChange: setSearch,
+          onKeyDown: (event) => { if (event.key === 'Enter') setQuery(search.trim()) },
+          variant: 'box',
+          'aria-label': 'Search Google Contacts',
+        }),
+        jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setQuery(search.trim()), children: 'Search' }),
+      ] }),
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setCreateOpen(true), children: 'New contact' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => listing.refetch(), children: 'Refresh' }),
+    ] }),
+
+    jsxs('div', {
+      style: { display: 'grid', gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : 'minmax(15rem, 21rem) minmax(0, 1fr)', gap: '0.7rem', flex: 1, minHeight: 0 },
+      children: [
+        showList ? jsx(Panel, { style: { overflow: 'auto', minHeight: 0, padding: '0.3rem' }, children: listing.isPending
+          ? jsx(LoadingBlock, { label: 'Loading contacts…', rows: 6 })
+          : listing.isError ? jsx(InlineError, { error: listing.error, onRetry: listing.refetch })
+          : !contacts.length ? jsx(EmptyBlock, { icon: 'organization', title: 'No contacts found', description: query ? `Nothing matched “${query}”.` : 'Add a contact to get started.', action: jsx(Button, { variant: 'outline', size: 'xs', onClick: () => setCreateOpen(true), children: 'New contact' }) })
+          : jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: contacts.map((contact) => jsx(ContactRow, {
+            contact,
+            selected: !!selected && contact.resourceName === selected.resourceName,
+            onClick: () => onSelect(contact.resourceName),
+          }, contact.resourceName || contact.name)) }) }) : null,
+
+        showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
+          ? jsx(ContactDetail, { contact: selected, onCompose, onClose: narrow ? () => onSelect(null) : null })
+          : jsx(EmptyBlock, { icon: 'organization', title: 'Pick a contact', description: 'Select someone to see their details, or add a new contact.' }) }) : null,
+      ],
+    }),
+    createOpen ? jsx(CreateContactDialog, { onClose: () => setCreateOpen(false), onCreated: (person) => onSelect(person.resourceName) }) : null,
+  ] })
+}
+
+function CreateContactDialog({ onClose, onCreated }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [organization, setOrganization] = useState('')
+  const [title, setTitle] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const ready = !!name.trim() && !!(email.trim() || phone.trim())
+
+  async function create() {
+    try {
+      const person = await post('/contacts', {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        organization: organization.trim(),
+        title: title.trim(),
+        confirm: true,
+      })
+      refreshEverything()
+      host.notify({ kind: 'success', message: 'Contact added to Google Contacts.' })
+      onCreated?.(person)
+      onClose()
+    } catch (err) {
+      throw new Error(errorInfo(err, 'Could not add the contact.').message)
+    }
+  }
+
+  return jsxs(Fragment, { children: [
+    jsx(Dialog, { open: true, onOpenChange: (open) => { if (!open) onClose() }, children: jsx(DialogContent, {
+      className: 'max-w-lg',
+      bodyClassName: 'gap-3',
+      children: jsxs(Fragment, { children: [
+        jsx(DialogHeader, { children: jsxs('div', { children: [
+          jsx(DialogTitle, { children: 'New contact' }),
+          jsx(DialogDescription, { children: 'Adds a person to your Google Contacts. Give a name and an email address or phone number.' }),
+        ] }) }),
+        jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.6rem' }, children: [
+          jsx(Field, { label: 'Name', children: jsx(Input, { value: name, onChange: (event) => setName(event.target.value), placeholder: 'Ana Lopez', autoFocus: true }) }),
+          jsx(Field, { label: 'Email', children: jsx(Input, { value: email, onChange: (event) => setEmail(event.target.value), placeholder: 'ana@acme.test', type: 'email' }) }),
+          jsx(Field, { label: 'Phone', children: jsx(Input, { value: phone, onChange: (event) => setPhone(event.target.value), placeholder: '+31 6 1234 5678' }) }),
+          jsx(Field, { label: 'Organisation', children: jsx(Input, { value: organization, onChange: (event) => setOrganization(event.target.value), placeholder: 'Acme' }) }),
+          jsx(Field, { label: 'Job title', children: jsx(Input, { value: title, onChange: (event) => setTitle(event.target.value), placeholder: 'CFO' }) }),
+        ] }),
+        !email.trim() && !phone.trim() && name.trim() ? jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-text-tertiary)' }, children: 'Add an email address or a phone number to save the contact.' }) : null,
+        jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.45rem' }, children: [
+          jsx(Button, { variant: 'outline', size: 'sm', onClick: onClose, children: 'Cancel' }),
+          jsx(Button, { variant: 'default', size: 'sm', onClick: () => setConfirmOpen(true), disabled: !ready, children: 'Review contact' }),
+        ] }),
+      ] }),
+    }) }),
+    jsx(ConfirmDialog, {
+      open: confirmOpen,
+      onClose: () => setConfirmOpen(false),
+      onConfirm: create,
+      title: `Add ${name.trim() || 'this contact'} to Google Contacts?`,
+      description: 'The contact is saved to your Google account and syncs to your devices.',
+      confirmLabel: 'Add contact',
+      busyLabel: 'Saving…',
+      doneLabel: 'Saved',
+      children: jsx('div', { style: { ...insetStyle, padding: '0.6rem 0.7rem', fontSize: '0.75rem', lineHeight: 1.6 }, children: [
+        name.trim(), email.trim(), phone.trim(), [title.trim(), organization.trim()].filter(Boolean).join(' · '),
+      ].filter(Boolean).join('\n') }),
+    }),
+  ] })
+}
+
+// ── Invoices → Sheet ─────────────────────────────────────────────────────────
+
+function InvoicesDialog({ onClose }) {
+  const [query, setQuery] = useState('')
+  const [days, setDays] = useState('45')
+  const [target, setTarget] = useState('')
+  const [preview, setPreview] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [result, setResult] = useState(null)
+  const windowDays = Math.min(365, Math.max(1, Number(days) || 45))
+  const params = new URLSearchParams({ days: String(windowDays), max_results: '15' })
+  if (query.trim()) params.set('query', query.trim())
+  const plan = useApi(`/invoices?${params.toString()}`, { enabled: preview, extra: [query, windowDays, preview] })
+  const rows = plan.data?.rows || []
+  const spreadsheetId = extractId(target, 'sheet')
+  const ready = preview && plan.isSuccess && rows.length > 0
+
+  function changed(next) {
+    setPreview(false)
+    return next
+  }
+
+  async function write() {
+    try {
+      const payload = await post('/invoices', {
+        query: query.trim(),
+        days: windowDays,
+        maxResults: 15,
+        spreadsheetId,
+        confirm: true,
+      })
+      setResult(payload)
+      refreshEverything()
+      host.notify({ kind: 'success', message: 'Invoice rows are in the sheet.' })
+    } catch (err) {
+      throw new Error(errorInfo(err, 'Could not write the invoice rows.').message)
+    }
+  }
+
+  const sheetLink = result ? (result.spreadsheet?.webUrl || sheetUrl(result.spreadsheet?.id || spreadsheetId)) : ''
+
+  return jsxs(Fragment, { children: [
+    jsx(Dialog, { open: true, onOpenChange: (open) => { if (!open) onClose() }, children: jsx(DialogContent, {
+      className: 'max-w-2xl',
+      bodyClassName: 'gap-3',
+      children: result
+        ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.75rem' }, children: [
+          jsx(EmptyBlock, {
+            icon: 'check',
+            title: result.created ? `Added ${plural(result.appended?.updatedRows || 0, 'invoice row')}` : 'Nothing new to add',
+            description: result.created
+              ? (result.skipped ? `${plural(result.skipped, 'invoice')} already in the sheet ${result.skipped === 1 ? 'was' : 'were'} skipped.` : 'Every invoice row is in the sheet now.')
+              : (result.note || 'Those invoices are already recorded.'),
+          }),
+          jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }, children: [
+            jsx(Button, { variant: 'outline', size: 'sm', onClick: () => openUrl(sheetLink), children: 'Open sheet' }),
+            jsx(Button, { variant: 'default', size: 'sm', onClick: onClose, children: 'Done' }),
+          ] }),
+        ] })
+        : jsxs(Fragment, { children: [
+          jsx(DialogHeader, { children: jsxs('div', { children: [
+            jsx(DialogTitle, { children: 'Invoices → Sheet' }),
+            jsx(DialogDescription, { children: 'Finds emails with attachments that look like invoices or receipts. Preview first. Nothing is written until you confirm.' }),
+          ] }) }),
+          jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 8rem', gap: '0.6rem' }, children: [
+            jsx(Field, { label: 'Extra search terms', hint: 'Optional, e.g. from:acme.test', children: jsx(Input, { value: query, onChange: (event) => setQuery(changed(event.target.value)), placeholder: 'Any Gmail search terms' }) }),
+            jsx(Field, { label: 'Look back (days)', children: jsx(Input, { type: 'number', min: 1, max: 365, value: days, onChange: (event) => setDays(changed(event.target.value)) }) }),
+          ] }),
+          jsx(Field, { label: 'Spreadsheet', hint: 'Paste a Sheets link or id. Leave empty to create “Invoices (Hermes)”.', children: jsx(Input, { value: target, onChange: (event) => setTarget(event.target.value), placeholder: 'Optional' }) }),
+          jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '0.45rem' }, children: [
+            jsx(Button, { variant: 'outline', size: 'sm', onClick: onClose, children: 'Close' }),
+            jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setPreview(true), loading: plan.isFetching, children: 'Preview invoices' }),
+            jsx(Button, { variant: 'default', size: 'sm', onClick: () => setConfirmOpen(true), disabled: !ready, children: 'Write to sheet…' }),
+          ] }),
+          !preview ? null
+            : plan.isPending ? jsx(LoadingBlock, { label: 'Scanning your inbox for invoices…', rows: 4 })
+            : plan.isError ? jsx(InlineError, { error: plan.error, onRetry: plan.refetch })
+            : !rows.length ? jsx(EmptyBlock, { icon: 'table', title: 'No matching invoices', description: plan.data?.note || 'Try a longer look-back window or other search terms.' })
+            : jsxs('div', { style: { ...insetStyle, maxHeight: '18rem', overflow: 'auto' }, children: [
+              jsx('div', { style: { padding: '0.45rem 0.6rem', fontSize: '0.7rem', color: 'var(--ui-text-tertiary)' }, children: `${plural(rows.length, 'invoice row')} found. Check each amount against its attachment. Amounts are read from the email text and can be wrong.` }),
+              ...rows.map((row, index) => jsxs('div', {
+                style: { display: 'grid', gridTemplateColumns: '5.5rem minmax(0, 1fr) 7.5rem minmax(0, 1fr)', gap: '0.5rem', padding: '0.4rem 0.6rem', borderTop: '1px solid var(--ui-stroke-secondary)', fontSize: '0.73rem', alignItems: 'baseline' },
+                children: [
+                  jsx('span', { style: { color: 'var(--ui-text-tertiary)' }, children: row.date || '—' }),
+                  jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: senderName(row.from) }),
+                  jsx('span', { style: { fontVariantNumeric: 'tabular-nums' }, children: row.amount ? `${row.currency ? `${row.currency} ` : ''}${row.amount}` : 'not found' }),
+                  jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ui-text-tertiary)' }, children: row.file }),
+                ],
+              }, `${row.date}-${index}`)),
+            ] }),
+        ] }),
+    }) }),
+    jsx(ConfirmDialog, {
+      open: confirmOpen,
+      onClose: () => setConfirmOpen(false),
+      onConfirm: write,
+      title: 'Write these rows to Google Sheets?',
+      description: spreadsheetId
+        ? 'Rows go after the last row of that spreadsheet. Invoices already recorded there are skipped.'
+        : 'A new spreadsheet named “Invoices (Hermes)” is created and the rows are added. Invoices already recorded are skipped.',
+      confirmLabel: 'Write rows',
+      busyLabel: 'Writing…',
+      doneLabel: 'Written',
+      children: jsx('div', { style: { ...insetStyle, padding: '0.6rem 0.7rem', fontSize: '0.74rem' }, children: `${plural(rows.length, 'invoice row')} from the preview above.` }),
+    }),
+  ] })
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+const SCOPE_ROWS = [
+  { id: 'gmail', label: 'Gmail', detail: 'Read mail and change labels (read, star, archive) without asking. Sending and drafting ask first.' },
+  { id: 'calendar', label: 'Calendar', detail: 'Read your agenda and check conflicts. Creating events and inviting people asks first.' },
+  { id: 'drive', label: 'Drive', detail: 'Search and read files. Creating folders and moving files ask first.' },
+  { id: 'docs', label: 'Docs', detail: 'Read documents. Creating documents and adding text asks first.' },
+  { id: 'sheets', label: 'Sheets', detail: 'Read spreadsheets. Creating sheets and adding rows asks first.' },
+  { id: 'contacts', label: 'Contacts', detail: 'Read and search contacts. Creating a contact asks first.' },
+]
+
+function SettingsView({ status, onRetry, retrying }) {
+  const setup = status?.setup || {}
+  const byId = Object.fromEntries((status?.services || []).map((row) => [row.id, row]))
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', overflow: 'auto', paddingBottom: '1.5rem' }, children: [
+    jsx(PageHeading, { title: 'Settings', subtitle: 'Your connection, what Hermes can reach, and how to change it.' }),
+
+    jsxs(Panel, { style: { padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }, children: [
+      jsx(SectionHeading, { title: 'Account' }),
+      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }, children: [
+        jsx(StateDot, { state: status?.connected ? 'ready' : 'needs_permission' }),
+        jsx('span', { children: status?.account || 'Not signed in' }),
+      ] }),
+      jsx('p', { style: { margin: 0, fontSize: '0.72rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.5 }, children: 'Hermes keeps one Google account per profile. To change accounts, sign out and sign in again.' }),
+    ] }),
+
+    jsxs(Panel, { style: { padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }, children: [
+      jsx(SectionHeading, { title: 'What Hermes can reach', detail: 'Granted when you signed in' }),
+      ...SCOPE_ROWS.map((scope, index) => jsxs('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.55rem 0', borderTop: index ? '1px solid var(--ui-stroke-secondary)' : 'none' },
+        children: [
+          jsx(Icon, { name: SERVICE_ICONS[scope.id] || 'file', size: '0.9rem', color: 'var(--ui-text-tertiary)' }),
+          jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
+            jsx('div', { style: { fontSize: '0.78rem', fontWeight: 550 }, children: scope.label }),
+            jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', lineHeight: 1.45, marginTop: '0.1rem' }, children: scope.detail }),
+          ] }),
+          jsx(StateBadge, { state: byId[scope.id]?.state || 'untested' }),
+        ],
+      }, scope.id)),
+    ] }),
+
+    jsxs(Panel, { style: { padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.55rem' }, children: [
+      jsx(SectionHeading, { title: 'Connection commands', detail: 'Run in a terminal' }),
+      jsx(CopyRow, { text: setup.signInCommand || 'hermes auth add google-workspace:google', label: 'Sign-in command' }),
+      jsx(CopyRow, { text: setup.statusCommand || 'hermes auth status google-workspace:google', label: 'Status command' }),
+      jsx(CopyRow, { text: setup.signOutCommand || 'hermes auth logout google-workspace:google', label: 'Sign-out command' }),
+      jsx('p', { style: { margin: '0.2rem 0 0', fontSize: '0.72rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.5 }, children: 'Hermes stores the refresh token in its own credential store. This plugin never sees it, and signing out removes it.' }),
+      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }, children: [
+        jsx(Button, { variant: 'default', size: 'sm', onClick: onRetry, loading: retrying, children: retrying ? 'Checking…' : 'Check again' }),
+        jsx(LinkAction, { icon: 'shield', onClick: () => openUrl('https://myaccount.google.com/permissions'), children: 'Manage Google access' }),
+      ] }),
+    ] }),
+  ] })
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+const NARROW_QUERY = '(max-width: 760px)'
+
+// Callers pass an id, a row object, or a click event. Only the id or object is meaningful.
+const idOf = (value) => (typeof value === 'string' ? value : value?.id) || null
+
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(NARROW_QUERY).matches : false))
+  useEffect(() => {
+    if (!window.matchMedia) return undefined
+    const query = window.matchMedia(NARROW_QUERY)
+    const onChange = () => setNarrow(query.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return narrow
+}
+
+function TabBar({ value, onChange }) {
+  const onKeyDown = (event) => {
+    const index = TABS.findIndex((item) => item.id === value)
+    let next = -1
+    if (event.key === 'ArrowRight') next = (index + 1) % TABS.length
+    if (event.key === 'ArrowLeft') next = (index - 1 + TABS.length) % TABS.length
+    if (event.key === 'Home') next = 0
+    if (event.key === 'End') next = TABS.length - 1
+    if (next < 0) return
+    event.preventDefault()
+    onChange(TABS[next].id)
+    event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus()
+  }
+  return jsx('div', {
+    role: 'tablist',
+    'aria-label': 'Google services',
+    onKeyDown,
+    style: { display: 'flex', gap: '0.15rem', flexWrap: 'wrap', padding: '0.2rem', borderRadius: '9px', background: 'var(--ui-bg-quaternary)' },
+    children: TABS.map((item) => {
+      const selected = item.id === value
+      return jsxs('button', {
+        type: 'button',
+        role: 'tab',
+        'aria-selected': selected,
+        tabIndex: selected ? 0 : -1,
+        onClick: () => onChange(item.id),
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.6rem',
+          border: 0, borderRadius: '7px', font: 'inherit', fontSize: '0.76rem',
+          fontWeight: selected ? 600 : 500, cursor: 'pointer',
+          color: selected ? 'var(--ui-text-primary)' : 'var(--ui-text-tertiary)',
+          background: selected ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent',
+        },
+        children: [jsx(Icon, { name: item.icon, size: '0.8rem' }), jsx('span', { children: item.label })],
+      }, item.id)
+    }),
+  })
+}
+
+function GoogleWorkspacePage() {
+  const narrow = useNarrow()
+  const [tab, setTab] = useState('Overview')
+  const [selectedMessageId, setSelectedMessageId] = useState(null)
+  const [selectedEventId, setSelectedEventId] = useState(null)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedDoc, setSelectedDoc] = useState(null)
+  const [selectedSheet, setSelectedSheet] = useState(null)
+  const [selectedContactId, setSelectedContactId] = useState(null)
+  const [compose, setCompose] = useState(null)
+  const [emailToEventMessage, setEmailToEventMessage] = useState(null)
+  const [eventOpen, setEventOpen] = useState(false)
+  const [brief, setBrief] = useState(null)
+  const [organizeOpen, setOrganizeOpen] = useState(false)
+  const [invoicesOpen, setInvoicesOpen] = useState(false)
+
+  const status = useApi('/status')
+  const connected = !!status.data?.connected
+  const overview = useApi('/overview', { enabled: connected })
+
+  const openMessage = (value) => { setSelectedMessageId(idOf(value)); setTab('Gmail') }
+  const openEvent = (value) => { setSelectedEventId(idOf(value)); setTab('Calendar') }
+  const openFile = (value) => { setSelectedFile(value && typeof value === 'object' ? value : null); setTab('Drive') }
+  const openDoc = (file) => { setSelectedDoc(file); setTab('Docs') }
+  const openSheet = (file) => { setSelectedSheet(file); setTab('Sheets') }
+  const openCompose = (initial) => setCompose({ initial: initial || {} })
+  // A brief needs a meeting. Without one, send the user to the calendar to pick it.
+  const openBrief = (eventId) => {
+    const id = idOf(eventId)
+    if (id) setBrief({ eventId: id, query: '' })
+    else setTab('Calendar')
+  }
+
+  function renderTab() {
+    switch (tab) {
+      case 'Gmail':
+        return jsx(GmailTab, { selectedId: selectedMessageId, onSelect: setSelectedMessageId, onCompose: openCompose, onEmailToEvent: setEmailToEventMessage, narrow })
+      case 'Calendar':
+        return jsx(CalendarTab, { selectedId: selectedEventId, onSelect: setSelectedEventId, onCreateEvent: () => setEventOpen(true), onBrief: openBrief, narrow })
+      case 'Drive':
+        return jsx(DriveTab, { selectedFile, onSelect: setSelectedFile, onOrganize: () => setOrganizeOpen(true), onOpenDoc: openDoc, onOpenSheet: openSheet, narrow })
+      case 'Docs':
+        return jsx(DocsTab, { selectedDoc, onSelect: setSelectedDoc, onOpenFile: openFile, narrow })
+      case 'Sheets':
+        return jsx(SheetsTab, { selectedSheet, onSelect: setSelectedSheet, narrow })
+      case 'Contacts':
+        return jsx(ContactsTab, { selectedId: selectedContactId, onSelect: setSelectedContactId, onCompose: openCompose, narrow })
+      case 'Settings':
+        return jsx(SettingsView, { status: status.data, onRetry: () => status.refetch(), retrying: status.isFetching })
+      default:
+        return jsx(OverviewTab, {
+          status: status.data,
+          overview,
+          onOpenMessage: openMessage,
+          onOpenEvent: openEvent,
+          onOpenFile: openFile,
+          onCompose: () => openCompose({}),
+          onEvent: () => setEventOpen(true),
+          onBrief: openBrief,
+          onOrganize: () => setOrganizeOpen(true),
+          onInvoices: () => setInvoicesOpen(true),
+        })
+    }
+  }
+
+  let body
+  if (status.isPending) body = jsx(LoadingBlock, { label: 'Checking your Google connection…', rows: 4 })
+  else if (status.isError) body = jsx(InlineError, { error: status.error, onRetry: status.refetch })
+  else if (!connected) body = jsx(SetupView, { status: status.data, onRetry: () => status.refetch(), retrying: status.isFetching })
+  else body = renderTab()
+
+  return jsxs('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '0.8rem', height: '100%', minHeight: 0, boxSizing: 'border-box', padding: narrow ? '0.8rem' : '1rem 1.1rem' },
+    children: [
+      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'space-between' }, children: [
+        jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }, children: [
+          jsx(Icon, { name: 'globe', size: '1rem', color: 'var(--ui-accent)' }),
+          jsx('h1', { style: { margin: 0, fontSize: '0.95rem', fontWeight: 650 }, children: 'Google Workspace' }),
+          connected && status.data?.account ? jsx('span', { style: { fontSize: '0.72rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: status.data.account }) : null,
+        ] }),
+        connected ? jsx(TabBar, { value: tab, onChange: setTab }) : null,
+      ] }),
+
+      jsx('div', { style: { flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }, children: body }),
+
+      compose ? jsx(ComposeDialog, { initial: compose.initial, onClose: () => setCompose(null) }) : null,
+      emailToEventMessage ? jsx(EmailToEventDialog, { message: emailToEventMessage, onClose: () => setEmailToEventMessage(null) }) : null,
+      eventOpen ? jsx(EventDialog, { onClose: () => setEventOpen(false) }) : null,
+      brief ? jsx(BriefDialog, {
+        eventId: brief.eventId,
+        query: brief.query,
+        onClose: () => setBrief(null),
+        onOpenMessage: (id) => { setBrief(null); openMessage(id) },
+        onOpenFile: (file) => { setBrief(null); openFile(file) },
+      }) : null,
+      organizeOpen ? jsx(OrganizeDialog, { onClose: () => setOrganizeOpen(false) }) : null,
+      invoicesOpen ? jsx(InvoicesDialog, { onClose: () => setInvoicesOpen(false) }) : null,
+    ],
+  })
+}
+
+// ── Registration ─────────────────────────────────────────────────────────────
+
+export default {
+  id: PLUGIN_ID,
+  name: 'Google Workspace',
+  description: 'Gmail, Calendar, Drive, Docs, Sheets and Contacts in one place. Hermes works across them and asks before it sends or changes anything.',
+  defaultEnabled: true,
+  register(ctx) {
+    pluginCtx = ctx
+    ctx.register({
+      id: 'page',
+      area: ROUTES_AREA,
+      data: { path: PAGE_PATH },
+      render: () => jsx(GoogleWorkspacePage, {}),
+    })
+    ctx.register({
+      id: 'nav',
+      area: SIDEBAR_NAV_AREA,
+      order: 60,
+      data: { codicon: 'globe', label: 'Google Workspace', path: PAGE_PATH },
+    })
+    ctx.register({
+      id: 'open',
+      area: PALETTE_AREA,
+      data: {
+        id: 'google-workspace.open',
+        label: 'Open Google Workspace',
+        keywords: ['google', 'gmail', 'calendar', 'drive', 'docs', 'sheets', 'contacts', 'workspace', 'email', 'invoice'],
+        run: () => host.navigate(PAGE_PATH),
+      },
+    })
+  },
+}
