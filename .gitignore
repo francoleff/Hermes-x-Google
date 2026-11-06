@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+node_modules/
+.DS_Store
+.env
+*.env
+google_token.json
+google_client_secret.json
+client_secret*.json
+*.log
+coverage/

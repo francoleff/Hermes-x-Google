@@ -1,0 +1,55 @@
+name: google-workspace
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: >-
+  Google Workspace for Hermes: a native desktop workspace plus agent tools for Gmail,
+  Calendar, Drive, Docs, Sheets and Contacts. Read across apps, prepare meeting briefs,
+  turn email into calendar events, collect invoices into Sheets, and organize Drive —
+  with every consequential write gated by Hermes approval.
+author: Franco Leff
+license: MIT
+tags: [google, gmail, calendar, drive, docs, sheets, productivity]
+
+# Google owns the OAuth flow. Hermes stores and refreshes the grant; the plugin never
+# sees the access token, refresh token or client secret. The user signs in once from a
+# terminal: `hermes auth add google-workspace:google`.
+#
+# Both variables are optional so the plugin still loads (and can explain setup) before
+# the user creates a Google Cloud OAuth client.
+optional_env:
+  - name: GOOGLE_WORKSPACE_CLIENT_ID
+    description: "OAuth client ID from a Google Cloud project (Desktop app client type)"
+    password: false
+  - name: GOOGLE_WORKSPACE_CLIENT_SECRET
+    description: "OAuth client secret from the same Google Cloud Desktop app client"
+    password: true
+
+oauth:
+  - id: google
+    authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+    token_url: https://oauth2.googleapis.com/token
+    scopes:
+      # Read mail and send/draft as the user. Kept to three narrow scopes instead of
+      # the all-or-nothing https://mail.google.com/ scope.
+      - https://www.googleapis.com/auth/gmail.readonly
+      - https://www.googleapis.com/auth/gmail.send
+      - https://www.googleapis.com/auth/gmail.compose
+      - https://www.googleapis.com/auth/calendar.events
+      # Drive needs broad visibility to search existing files and to move them into
+      # folders; drive.file would only see files this app created.
+      - https://www.googleapis.com/auth/drive
+      - https://www.googleapis.com/auth/documents
+      - https://www.googleapis.com/auth/spreadsheets
+      - https://www.googleapis.com/auth/contacts.readonly
+    client_id_env: GOOGLE_WORKSPACE_CLIENT_ID
+    client_secret_env: GOOGLE_WORKSPACE_CLIENT_SECRET
+    hosts:
+      - www.googleapis.com
+      - gmail.googleapis.com
+      - docs.googleapis.com
+      - sheets.googleapis.com
+      - people.googleapis.com
+    # Google only returns a refresh token with access_type=offline, and only
+    # re-consents when prompt=consent.
+    authorize_params: {access_type: offline, prompt: consent}
