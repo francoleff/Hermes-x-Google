@@ -72,7 +72,7 @@ cp -R /path/to/google-workspace-hermes/{plugin.yaml,__init__.py,hermes_google_wo
 hermes plugins enable google-workspace
 ```
 
-Then reload desktop plugins from the command palette: press ⌘K and choose **Reload desktop plugins**. The sidebar gets a **Google Workspace** entry.
+Then open **Capabilities → Plugins** in Hermes Desktop and press **Rescan** (or restart the app). The desktop app copies the plugin's desktop half into place, and a **Google Workspace** entry appears in the sidebar.
 
 ### 3. Sign in
 
@@ -254,7 +254,8 @@ Report any step that fails, with the message shown in the UI. A permission error
 | A service shows a permission message | Sign in again to grant the missing scope: `hermes auth add google-workspace:google`. |
 | A 403 that is not a permission message | Google's message names the API or file. If it says an API is not enabled, enable it in Google Cloud Console (step 1). |
 | "Could not reach Google" | Check the network. Reads retry automatically. Writes do not, so check the result before you retry them. |
-| The sidebar entry is missing | Run `hermes plugins list`, enable the plugin with `hermes plugins enable google-workspace`, then reload desktop plugins (⌘K). |
+| The sidebar entry is missing | In **Capabilities → Plugins**, press **Rescan** or restart the app. Check that `hermes plugins list` shows `google-workspace` as enabled. |
+| The agent does not see the Google tools | Start a new chat (`/reset`). A session keeps the tool list it started with. |
 
 ## Repository layout
 
