@@ -18,7 +18,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import client
-from .client import WorkspaceError, get, patch, post
+from .client import WorkspaceError, delete, get, patch, post, put
 
 MAX_TEXT = 20_000
 MAX_APPEND_ROWS = 500
@@ -370,6 +370,68 @@ def gmail_draft(*, to: str, subject: str, body: str, cc: str = "", bcc: str = ""
     }
 
 
+def gmail_update_draft(
+    draft_id: str,
+    *,
+    to: str,
+    subject: str = "",
+    body: str = "",
+    cc: str = "",
+    bcc: str = "",
+    html: str = "",
+    thread_id: str = "",
+    in_reply_to: str = "",
+) -> dict:
+    """Replace a draft's content. Nothing is sent. Fields not passed here are cleared."""
+    key = str(draft_id or "").strip()
+    if not key:
+        raise WorkspaceError("bad_request", "A draft id is required.")
+    raw = _build_raw(to=to, subject=subject, body=body, cc=cc, bcc=bcc, html=html, in_reply_to=in_reply_to)
+    message: dict[str, Any] = {"raw": raw}
+    if thread_id:
+        message["threadId"] = thread_id
+    draft, _ = put(f"{client.GMAIL_ROOT}/drafts/{quote(key, safe='')}", {"message": message})
+    draft = draft if isinstance(draft, dict) else {}
+    inner = draft.get("message") or {}
+    return {
+        "draftId": draft.get("id") or key,
+        "messageId": inner.get("id"),
+        "threadId": inner.get("threadId"),
+        "webUrl": "https://mail.google.com/mail/u/0/#drafts",
+        "updated": True,
+    }
+
+
+def gmail_forward(message_id: str, *, to: str, note: str = "", cc: str = "", bcc: str = "") -> dict:
+    """Send an existing email on to new people, with an optional note above the quoted original.
+
+    The forward starts a new thread. Attachments on the original are not included.
+    """
+    if not str(to or "").strip():
+        raise WorkspaceError("bad_request", "At least one recipient is required.")
+    original = gmail_read(message_id)
+    subject = str(original.get("subject") or "")
+    forwarded_subject = subject if subject.lower().startswith("fwd:") else f"Fwd: {subject}".rstrip()
+    header = "\n".join([
+        "---------- Forwarded message ---------",
+        f"From: {original.get('from') or ''}",
+        f"Date: {original.get('date') or ''}",
+        f"Subject: {subject}",
+        f"To: {original.get('to') or ''}",
+    ])
+    quoted = f"{header}\n\n{original.get('body') or ''}"
+    text = f"{note.strip()}\n\n{quoted}" if str(note or "").strip() else quoted
+    raw = _build_raw(to=to, subject=forwarded_subject, body=text, cc=cc, bcc=bcc)
+    sent, _ = post(f"{client.GMAIL_ROOT}/messages/send", {"raw": raw})
+    sent = sent if isinstance(sent, dict) else {}
+    return {
+        "id": sent.get("id"),
+        "threadId": sent.get("threadId"),
+        "forwardedFrom": message_id,
+        "webUrl": f"https://mail.google.com/mail/u/0/#all/{sent.get('id')}",
+    }
+
+
 # action -> (labels to add, labels to remove). Each is reversible and notifies nobody.
 _MODIFY_ACTIONS: dict[str, tuple[list[str], list[str]]] = {
     "mark_read": ([], ["UNREAD"]),
@@ -480,6 +542,160 @@ def calendar_agenda(days: int = 7, max_results: int = 20, calendar_id: str = "pr
         "events": events,
         "count": len(events),
     }
+
+
+_SEND_UPDATES = frozenset({"all", "externalOnly", "none"})
+_RSVP_RESPONSES = frozenset({"accepted", "declined", "tentative"})
+_GUEST_KEYS = ("email", "displayName", "optional", "resource", "responseStatus")
+
+
+def _event_id(event_id: str) -> str:
+    cleaned = str(event_id or "").strip()
+    if not cleaned:
+        raise WorkspaceError("bad_request", "An event id is required.")
+    return cleaned
+
+
+def _send_updates(value: str) -> str:
+    choice = str(value or "all").strip()
+    if choice not in _SEND_UPDATES:
+        raise WorkspaceError(
+            "bad_request",
+            "send_updates must be one of: " + ", ".join(sorted(_SEND_UPDATES)) + ".",
+        )
+    return choice
+
+
+def _guest_for_patch(guest: dict) -> dict:
+    """The guest fields Google accepts back. The attendee list is replaced whole, so keep every guest."""
+    return {key: guest[key] for key in _GUEST_KEYS if guest.get(key) not in (None, "")}
+
+
+def calendar_update_event(
+    event_id: str,
+    *,
+    summary: Optional[str] = None,
+    start: str = "",
+    end: str = "",
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+    add_attendees: Optional[list[str]] = None,
+    timezone_name: str = "",
+    send_updates: str = "all",
+    calendar_id: str = "primary",
+) -> dict:
+    """Change an event. Only the fields given change. A new start keeps the event's length."""
+    key = _event_id(event_id)
+    notify = _send_updates(send_updates)
+    zone = str(timezone_name or "").strip()
+    new_title = None if summary is None else " ".join(str(summary).split())
+    if new_title is not None and not new_title:
+        raise WorkspaceError("bad_request", "An event title cannot be blank.")
+    guests = [addr.strip() for addr in (add_attendees or []) if str(addr).strip()]
+    for addr in guests:
+        if not _valid_email(addr):
+            raise WorkspaceError("bad_request", f"{addr!r} is not a valid email address.")
+    if not (new_title or start or end or description is not None or location is not None or guests):
+        raise WorkspaceError(
+            "bad_request",
+            "Nothing to change. Give a new time, title, place, notes or guests.",
+        )
+    new_start = parse_time(start, zone) if start else None
+    new_end = parse_time(end, zone) if end else None
+    if new_start is not None and new_end is not None and new_end <= new_start:
+        raise WorkspaceError("bad_request", "The event end must be after its start.")
+
+    url = f"{_calendar_url(calendar_id)}/{quote(key, safe='')}"
+    current: dict = {}
+    if start or end or guests:
+        payload, _ = get(url)
+        if not isinstance(payload, dict) or not payload.get("id"):
+            raise WorkspaceError("not_found", f"No calendar event {key!r}.")
+        current = payload
+
+    body: dict[str, Any] = {}
+    if new_title is not None:
+        body["summary"] = new_title
+    if description is not None:
+        body["description"] = description
+    if location is not None:
+        body["location"] = location
+
+    if start or end:
+        was_start_text = (current.get("start") or {}).get("dateTime")
+        if not was_start_text:
+            raise WorkspaceError(
+                "bad_request",
+                "All-day events can't be moved to a specific time here.",
+                hint="Change the date in Google Calendar, or cancel the event and create a new one.",
+            )
+        was_start = parse_time(was_start_text)
+        was_end = parse_time((current.get("end") or {}).get("dateTime") or was_start_text)
+        starts_at = new_start if new_start is not None else was_start
+        ends_at = new_end if new_end is not None else starts_at + (was_end - was_start)
+        if ends_at <= starts_at:
+            raise WorkspaceError("bad_request", "The event end must be after its start.")
+        for field, moment in (("start", starts_at), ("end", ends_at)):
+            body[field] = _event_time(moment, all_day=False)
+            if zone:
+                body[field]["timeZone"] = zone
+
+    if guests:
+        guests_now = [g for g in (current.get("attendees") or []) if isinstance(g, dict)]
+        known = {str(g.get("email", "")).lower() for g in guests_now}
+        added: list[str] = []
+        for addr in guests:
+            if addr.lower() not in known:
+                known.add(addr.lower())
+                added.append(addr)
+        if added:
+            body["attendees"] = [_guest_for_patch(g) for g in guests_now] + [{"email": a} for a in added]
+
+    if not body:
+        raise WorkspaceError("bad_request", "Nothing new to change: those guests are already invited.")
+    updated, _ = patch(url, body, params={"sendUpdates": notify})
+    result = _event_summary(updated if isinstance(updated, dict) else {})
+    result["updated"] = True
+    return result
+
+
+def calendar_rsvp(event_id: str, response: str, *, calendar_id: str = "primary") -> dict:
+    """Answer an invitation as yourself. Only your own response changes; the organiser is told."""
+    key = _event_id(event_id)
+    choice = str(response or "").strip().lower()
+    if choice not in _RSVP_RESPONSES:
+        raise WorkspaceError("bad_request", "response must be accepted, declined or tentative.")
+    url = f"{_calendar_url(calendar_id)}/{quote(key, safe='')}"
+    current, _ = get(url)
+    if not isinstance(current, dict) or not current.get("id"):
+        raise WorkspaceError("not_found", f"No calendar event {key!r}.")
+    guests = [g for g in (current.get("attendees") or []) if isinstance(g, dict)]
+    if not any(g.get("self") for g in guests):
+        raise WorkspaceError(
+            "bad_request",
+            "You are not invited to this event, so there is no response to change.",
+        )
+    updated_guests = []
+    for guest in guests:
+        person = _guest_for_patch(guest)
+        if guest.get("self"):
+            person["responseStatus"] = choice
+        updated_guests.append(person)
+    patch(url, {"attendees": updated_guests}, params={"sendUpdates": "all"})
+    return {
+        "id": current.get("id"),
+        "summary": current.get("summary") or "(no title)",
+        "response": choice,
+        "updated": True,
+    }
+
+
+def calendar_cancel_event(event_id: str, *, send_updates: str = "all", calendar_id: str = "primary") -> dict:
+    """Delete an event. Guests are told unless send_updates says otherwise."""
+    key = _event_id(event_id)
+    notify = _send_updates(send_updates)
+    delete(f"{_calendar_url(calendar_id)}/{quote(key, safe='')}", params={"sendUpdates": notify})
+    return {"id": key, "cancelled": True, "sendUpdates": notify}
 
 
 def calendar_search(query: str, days: int = 30, max_results: int = 10) -> dict:
@@ -716,6 +932,57 @@ def drive_move(file_id: str, add_parents: str = "", remove_parents: str = "") ->
     return _file_summary(payload if isinstance(payload, dict) else {})
 
 
+_SHARE_ROLES = frozenset({"reader", "commenter", "writer"})
+
+
+def drive_rename(file_id: str, name: str) -> dict:
+    key = str(file_id or "").strip()
+    if not key:
+        raise WorkspaceError("bad_request", "A file id is required.")
+    new_name = " ".join(str(name or "").split())
+    if not new_name:
+        raise WorkspaceError("bad_request", "A new name is required.")
+    payload, _ = patch(
+        f"{client.DRIVE_ROOT}/files/{quote(key, safe='')}",
+        {"name": new_name},
+        params={"fields": _DRIVE_FIELDS, "supportsAllDrives": True},
+    )
+    summary = _file_summary(payload if isinstance(payload, dict) else {})
+    summary["renamed"] = True
+    return summary
+
+
+def drive_share(file_id: str, email: str, *, role: str = "reader", notify: bool = False) -> dict:
+    """Give one person access to a file. Ownership transfer and public links are not offered here."""
+    key = str(file_id or "").strip()
+    if not key:
+        raise WorkspaceError("bad_request", "A file id is required.")
+    address = str(email or "").strip()
+    if not _valid_email(address):
+        raise WorkspaceError("bad_request", f"{address!r} is not a valid email address.")
+    choice = str(role or "").strip().lower()
+    if choice not in _SHARE_ROLES:
+        raise WorkspaceError(
+            "bad_request",
+            "role must be reader, commenter or writer.",
+            hint="Ownership transfer and public links are not available through this tool.",
+        )
+    payload, _ = post(
+        f"{client.DRIVE_ROOT}/files/{quote(key, safe='')}/permissions",
+        {"type": "user", "role": choice, "emailAddress": address},
+        params={"sendNotificationEmail": bool(notify), "supportsAllDrives": True},
+    )
+    permission = payload if isinstance(payload, dict) else {}
+    return {
+        "fileId": key,
+        "email": address,
+        "role": permission.get("role") or choice,
+        "permissionId": permission.get("id"),
+        "notified": bool(notify),
+        "shared": True,
+    }
+
+
 def drive_find_folder(name: str, parent_id: str = "") -> Optional[dict]:
     clauses = [
         "trashed = false",
@@ -846,11 +1113,100 @@ def docs_append(document_id: str, text: str) -> dict:
     }
 
 
+def docs_replace_text(document_id: str, find: str, replace: str = "", *, match_case: bool = True) -> dict:
+    """Replace every match of a phrase in a Google Doc and report how many changed."""
+    key = str(document_id or "").strip()
+    search = str(find or "")
+    if not key:
+        raise WorkspaceError("bad_request", "A document id is required.")
+    if not search.strip():
+        raise WorkspaceError("bad_request", "Text to find is required.")
+    payload, _ = post(
+        f"{client.DOCS_ROOT}/documents/{quote(key, safe='')}:batchUpdate",
+        {"requests": [{"replaceAllText": {
+            "containsText": {"text": search, "matchCase": bool(match_case)},
+            "replaceText": str(replace or ""),
+        }}]},
+    )
+    reply = next(iter((payload or {}).get("replies") or []), {}) if isinstance(payload, dict) else {}
+    count = int(((reply or {}).get("replaceAllText") or {}).get("occurrencesChanged") or 0)
+    return {"id": key, "find": search, "occurrencesChanged": count, "replaced": count > 0,
+            "webUrl": _doc_url(key)}
+
+
 # ── Sheets ───────────────────────────────────────────────────────────────────
 
 
 def _sheet_url(spreadsheet_id: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+
+
+MAX_UPDATE_CELLS = 1000
+
+
+def _filled(cell: Any) -> bool:
+    return cell is not None and str(cell).strip() != ""
+
+
+def sheets_update_range(spreadsheet_id: str, cell_range: str, rows: list[list[Any]], *,
+                        overwrite: bool = False) -> dict:
+    """Write rows into a fixed range. Cells that already hold a value are only replaced when overwrite is set."""
+    key = str(spreadsheet_id or "").strip()
+    target = str(cell_range or "").strip()
+    if not key:
+        raise WorkspaceError("bad_request", "A spreadsheet id is required.")
+    if not target:
+        raise WorkspaceError("bad_request", "A range is required, for example Budget!A1:B2.")
+    if not isinstance(rows, list) or not all(isinstance(row, list) for row in rows):
+        raise WorkspaceError("bad_request", "Rows must be lists of cell values.")
+    cells = sum(len(row) for row in rows)
+    if cells == 0:
+        raise WorkspaceError("bad_request", "There is nothing to write.")
+    if cells > MAX_UPDATE_CELLS:
+        raise WorkspaceError("bad_request", f"At most {MAX_UPDATE_CELLS} cells per call.")
+    url = f"{client.SHEETS_ROOT}/{quote(key, safe='')}/values/{quote(target, safe='')}"
+    if not overwrite:
+        current, _ = get(url)
+        values = (current.get("values") or []) if isinstance(current, dict) else []
+        filled = sum(1 for row in values for cell in row if _filled(cell))
+        if filled:
+            raise WorkspaceError(
+                "bad_request",
+                f"{filled} cell(s) in {target} already have values, so nothing was written.",
+                hint="Choose an empty range, or call again with overwrite set to true once the user agrees.",
+            )
+    payload, _ = put(url, {"values": rows}, params={"valueInputOption": "USER_ENTERED"})
+    payload = payload if isinstance(payload, dict) else {}
+    return {
+        "id": key,
+        "range": payload.get("updatedRange") or target,
+        "updatedCells": int(payload.get("updatedCells") or 0),
+        "overwrote": bool(overwrite),
+        "updated": True,
+        "webUrl": _sheet_url(key),
+    }
+
+
+def sheets_create_tab(spreadsheet_id: str, title: str) -> dict:
+    key = str(spreadsheet_id or "").strip()
+    clean = " ".join(str(title or "").split())
+    if not key:
+        raise WorkspaceError("bad_request", "A spreadsheet id is required.")
+    if not clean:
+        raise WorkspaceError("bad_request", "A tab name is required.")
+    payload, _ = post(
+        f"{client.SHEETS_ROOT}/{quote(key, safe='')}:batchUpdate",
+        {"requests": [{"addSheet": {"properties": {"title": clean}}}]},
+    )
+    reply = next(iter((payload or {}).get("replies") or []), {}) if isinstance(payload, dict) else {}
+    props = ((reply or {}).get("addSheet") or {}).get("properties") or {}
+    return {
+        "id": key,
+        "title": props.get("title") or clean,
+        "sheetId": props.get("sheetId"),
+        "created": True,
+        "webUrl": _sheet_url(key),
+    }
 
 
 def sheets_read(spreadsheet_id: str, cell_range: str = "A1:Z100") -> dict:
@@ -1008,6 +1364,66 @@ def _valid_email(value: str) -> bool:
         and not domain.startswith(".")
         and not domain.endswith(".")
     )
+
+
+def contacts_update(resource_name: str, *, name: str = "", email: str = "", phone: str = "",
+                    organization: str = "", title: str = "") -> dict:
+    """Change one contact. Only the fields given are touched; existing emails and phones are kept."""
+    resource = str(resource_name or "").strip()
+    person_id = resource[len("people/"):].strip() if resource.startswith("people/") else ""
+    if not person_id:
+        raise WorkspaceError("bad_request", "Use a contact's resource name, such as people/c1234.")
+    clean_name = " ".join(str(name or "").split())
+    clean_email = str(email or "").strip()
+    clean_phone = str(phone or "").strip()
+    clean_org = str(organization or "").strip()
+    clean_title = str(title or "").strip()
+    if not any((clean_name, clean_email, clean_phone, clean_org, clean_title)):
+        raise WorkspaceError("bad_request", "Give at least one field to change.")
+    if clean_email and not _valid_email(clean_email):
+        raise WorkspaceError("bad_request", f"{clean_email!r} is not a valid email address.")
+    person_url = f"{client.PEOPLE_ROOT}/people/{quote(person_id, safe='')}"
+    current, _ = get(person_url, params={"personFields": _PERSON_FIELDS})
+    if not isinstance(current, dict) or not current.get("resourceName"):
+        raise WorkspaceError("not_found", f"No contact {resource!r}.")
+    if not current.get("etag"):
+        raise WorkspaceError(
+            "google_unavailable",
+            "Google did not return a version for this contact, so it was not changed.",
+        )
+    body: dict[str, Any] = {"etag": current["etag"]}
+    fields: list[str] = []
+    if clean_name:
+        body["names"] = [_split_name(clean_name)]
+        fields.append("names")
+    if clean_email:
+        known = [e.get("value", "") for e in current.get("emailAddresses") or [] if isinstance(e, dict)]
+        if clean_email.lower() not in {value.lower() for value in known}:
+            body["emailAddresses"] = [{"value": v} for v in known if v] + [{"value": clean_email}]
+            fields.append("emailAddresses")
+    if clean_phone:
+        known_phones = [p.get("value", "") for p in current.get("phoneNumbers") or [] if isinstance(p, dict)]
+        if clean_phone not in known_phones:
+            body["phoneNumbers"] = [{"value": v} for v in known_phones if v] + [{"value": clean_phone}]
+            fields.append("phoneNumbers")
+    if clean_org or clean_title:
+        orgs = [o for o in current.get("organizations") or [] if isinstance(o, dict)]
+        existing = orgs[0] if orgs else {}
+        body["organizations"] = [{
+            "name": clean_org or existing.get("name", ""),
+            "title": clean_title or existing.get("title", ""),
+        }]
+        fields.append("organizations")
+    if not fields:
+        raise WorkspaceError("bad_request", "Nothing new to change: that information is already on the contact.")
+    updated, _ = patch(
+        f"{person_url}:updateContact",
+        body,
+        params={"updatePersonFields": ",".join(fields), "personFields": _PERSON_FIELDS},
+    )
+    summary = _person_summary(updated if isinstance(updated, dict) else {})
+    summary["updated"] = True
+    return summary
 
 
 def _split_name(name: str) -> dict:

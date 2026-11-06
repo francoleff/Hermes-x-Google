@@ -30,6 +30,16 @@ _ALWAYS_APPROVE: dict[str, str] = {
     "google_sheets_append": "append rows to a Google Sheet",
     "google_drive_create_folder": "create a folder in your Drive",
     "google_drive_move": "move a file in your Drive",
+    "google_calendar_update_event": "change a calendar event",
+    "google_calendar_cancel_event": "cancel a calendar event",
+    "google_calendar_rsvp": "reply to a calendar invitation",
+    "google_gmail_forward": "forward an email",
+    "google_docs_replace_text": "replace text in a Google Doc",
+    "google_sheets_update_range": "change cells in a Google Sheet",
+    "google_sheets_create_tab": "add a tab to a Google Sheet",
+    "google_contacts_update": "change a Google contact",
+    "google_drive_rename": "rename a file in your Drive",
+    "google_drive_share": "share a Drive file with someone",
 }
 
 # Conditional: read-only by default, consequential when the caller opts in.
@@ -45,6 +55,13 @@ def _truthy(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
+
+
+def _short(value: Any, limit: int = 60) -> str:
+    text = " ".join(str(value or "").split())
+    if not text:
+        return "(empty)"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _detail(tool_name: str, args: dict) -> str:
@@ -78,6 +95,47 @@ def _detail(tool_name: str, args: dict) -> str:
         return f"Search: {args.get('query') or 'invoices'}\nTarget: {args.get('spreadsheet_id') or 'a new spreadsheet'}"
     if tool_name == "google_meeting_brief":
         return f"Meeting: {args.get('event_id') or args.get('query') or '(next meeting)'}"
+    if tool_name == "google_docs_replace_text":
+        return (f"Document: {args.get('document_id') or '(unset)'}\n"
+                f"Find: {_short(args.get('find'))}\n"
+                f"Replace with: {_short(args.get('replace'))}")
+    if tool_name == "google_sheets_update_range":
+        rows = args.get("rows") if isinstance(args.get("rows"), list) else []
+        cells = sum(len(row) for row in rows if isinstance(row, list))
+        overwrite = "\nOverwrites cells that already have values" if _truthy(args.get("overwrite")) else ""
+        return (f"Sheet: {args.get('spreadsheet_id') or '(unset)'}\n"
+                f"Range: {args.get('range') or '(unset)'}\n"
+                f"Cells: {cells}{overwrite}")
+    if tool_name == "google_sheets_create_tab":
+        return f"Sheet: {args.get('spreadsheet_id') or '(unset)'}\nNew tab: {_short(args.get('title'))}"
+    if tool_name == "google_calendar_update_event":
+        lines = [f"Event: {args.get('event_id') or '(unset)'}"]
+        if args.get("summary") is not None:
+            lines.append(f"New title: {_short(args.get('summary'))}")
+        if args.get("start"):
+            lines.append(f"New start: {args.get('start')}")
+        if args.get("end"):
+            lines.append(f"New end: {args.get('end')}")
+        guests = args.get("add_attendees") or []
+        if guests:
+            lines.append(f"Add guests: {len(guests) if isinstance(guests, list) else 1}")
+        return "\n".join(lines)
+    if tool_name == "google_calendar_cancel_event":
+        return f"Event: {args.get('event_id') or '(unset)'}\nTell guests: {args.get('send_updates') or 'all'}"
+    if tool_name == "google_calendar_rsvp":
+        return f"Event: {args.get('event_id') or '(unset)'}\nReply: {args.get('response') or '(unset)'}"
+    if tool_name == "google_gmail_forward":
+        to = str(args.get("to") or "").strip()
+        count = len([part for part in to.replace(";", ",").split(",") if part.strip()])
+        return (f"Message: {args.get('message_id') or '(unset)'}\n"
+                f"To: {to or '(none)'} ({count} recipient{'s' if count != 1 else ''})")
+    if tool_name == "google_contacts_update":
+        return f"Contact: {args.get('resource_name') or '(unset)'}"
+    if tool_name == "google_drive_rename":
+        return f"File: {args.get('file_id') or '(unset)'}\nNew name: {_short(args.get('name'))}"
+    if tool_name == "google_drive_share":
+        return (f"File: {args.get('file_id') or '(unset)'}\n"
+                f"Share with: {args.get('email') or '(unset)'} ({args.get('role') or 'reader'})")
     return ""
 
 

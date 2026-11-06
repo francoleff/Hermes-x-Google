@@ -39,6 +39,34 @@ def _flag(args: dict, key: str) -> bool:
     return bool(value)
 
 
+def _maybe_text(args: dict, key: str) -> str | None:
+    """Like _text, but None when the key is absent, so an update can tell 'leave alone' from 'clear'."""
+    if args.get(key) is None:
+        return None
+    return _text(args, key)
+
+
+def _raw_text(args: dict, key: str) -> str:
+    """The value exactly as given, for text where leading and trailing spaces matter."""
+    value = args.get(key)
+    return "" if value is None else str(value)
+
+
+def _optional_flag(args: dict, key: str, default: bool) -> bool:
+    return default if args.get(key) is None else _flag(args, key)
+
+
+def _emails(args: dict, key: str) -> list[str]:
+    value = args.get(key)
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        value = value.replace(";", ",").split(",")
+    if not isinstance(value, list):
+        raise WorkspaceError("bad_request", f"`{key}` must be a list of email addresses.")
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def _rows(args: dict) -> list[list[Any]]:
     raw = args.get("rows")
     if raw is None:
@@ -612,7 +640,280 @@ SCHEMAS: list[dict] = [
             "confirm": {"type": "boolean", "description": "Perform the moves."},
         }, ["query", "folder_name"]),
     },
+    {
+        "name": "google_calendar_search",
+        "description": "Search Google Calendar events by text over the next N days (default 30). Read-only.",
+        "parameters": _schema({
+            "query": {"type": "string", "description": "Words to look for. Leave empty to list upcoming events."},
+            "days": {"type": "integer", "description": "How many days ahead to search, 1-365. Default 30."},
+            "max_results": {"type": "integer", "description": "1-50. Default 10."},
+        }),
+    },
+    {
+        "name": "google_calendar_update_event",
+        "description": (
+            "Change an existing calendar event: title, time, place, notes, or add guests. Give only the "
+            "fields to change; a new start keeps the event's length. Requires human approval."
+        ),
+        "parameters": _schema({
+            "event_id": {"type": "string", "description": "Event id from calendar search or agenda."},
+            "summary": {"type": "string"},
+            "start": {"type": "string", "description": "New start, ISO date-time, e.g. 2026-11-13T09:00."},
+            "end": {"type": "string", "description": "New end, ISO date-time. Optional when start is given."},
+            "description": {"type": "string"},
+            "location": {"type": "string"},
+            "add_attendees": {"type": "array", "items": {"type": "string"},
+                              "description": "Email addresses to add as guests. Existing guests are kept."},
+            "timezone": {"type": "string", "description": "IANA zone for start and end, e.g. Europe/Amsterdam."},
+            "send_updates": {"type": "string", "enum": ["all", "externalOnly", "none"],
+                             "description": "Who is told about the change. Default all."},
+        }, ["event_id"]),
+    },
+    {
+        "name": "google_calendar_cancel_event",
+        "description": (
+            "Cancel and delete a calendar event. Guests are told unless send_updates is none. "
+            "Requires human approval."
+        ),
+        "parameters": _schema({
+            "event_id": {"type": "string"},
+            "send_updates": {"type": "string", "enum": ["all", "externalOnly", "none"],
+                             "description": "Who is told. Default all."},
+        }, ["event_id"]),
+    },
+    {
+        "name": "google_calendar_rsvp",
+        "description": (
+            "Accept, decline or tentatively accept an invitation as yourself. The organiser is told. "
+            "Requires human approval."
+        ),
+        "parameters": _schema({
+            "event_id": {"type": "string"},
+            "response": {"type": "string", "enum": ["accepted", "declined", "tentative"]},
+        }, ["event_id", "response"]),
+    },
+    {
+        "name": "google_gmail_update_draft",
+        "description": (
+            "Replace the content of an existing Gmail draft. Nothing is sent. Every field is replaced, "
+            "so pass each one you want kept. Attachments on the old draft are not kept."
+        ),
+        "parameters": _schema({
+            "draft_id": {"type": "string", "description": "Draft id from google_gmail_draft."},
+            "to": {"type": "string"},
+            "subject": {"type": "string"},
+            "body": {"type": "string"},
+            "cc": {"type": "string"},
+            "bcc": {"type": "string"},
+        }, ["draft_id", "to", "subject", "body"]),
+    },
+    {
+        "name": "google_gmail_forward",
+        "description": (
+            "Forward an existing email to new recipients, with an optional note above the quoted original. "
+            "Starts a new thread. Attachments on the original are not included. Requires human approval."
+        ),
+        "parameters": _schema({
+            "message_id": {"type": "string", "description": "Message id from Gmail search or read."},
+            "to": {"type": "string", "description": "Comma-separated recipients."},
+            "note": {"type": "string", "description": "Optional text above the forwarded message."},
+            "cc": {"type": "string"},
+            "bcc": {"type": "string"},
+        }, ["message_id", "to"]),
+    },
+    {
+        "name": "google_docs_replace_text",
+        "description": (
+            "Replace every match of a phrase in a Google Doc and report how many changed. "
+            "Requires human approval."
+        ),
+        "parameters": _schema({
+            "document_id": {"type": "string"},
+            "find": {"type": "string", "description": "Text to find, exactly as it appears."},
+            "replace": {"type": "string", "description": "Replacement text. An empty string deletes the matches."},
+            "match_case": {"type": "boolean", "description": "Match capitals exactly. Default true."},
+        }, ["document_id", "find", "replace"]),
+    },
+    {
+        "name": "google_sheets_metadata",
+        "description": "List a Google Sheet's title, its tabs and their row counts. Read-only.",
+        "parameters": _schema({"spreadsheet_id": {"type": "string"}}, ["spreadsheet_id"]),
+    },
+    {
+        "name": "google_sheets_update_range",
+        "description": (
+            "Write rows into a fixed cell range such as Budget!A5:B6. Refuses when any of those cells "
+            "already has a value, unless overwrite is true. Requires human approval."
+        ),
+        "parameters": _schema({
+            "spreadsheet_id": {"type": "string"},
+            "range": {"type": "string", "description": "A1 notation with the tab name, e.g. Budget!A5:B5."},
+            "rows": {"type": "array", "items": {"type": "array", "items": {}}, "description": "Rows of cells."},
+            "overwrite": {"type": "boolean", "description": "Replace cells that already have values. Default false."},
+        }, ["spreadsheet_id", "range", "rows"]),
+    },
+    {
+        "name": "google_sheets_create_tab",
+        "description": "Add a new tab to an existing Google Sheet. Requires human approval.",
+        "parameters": _schema({
+            "spreadsheet_id": {"type": "string"},
+            "title": {"type": "string", "description": "Name for the new tab."},
+        }, ["spreadsheet_id", "title"]),
+    },
+    {
+        "name": "google_contacts_update",
+        "description": (
+            "Change one Google contact. Only the fields you give are touched; existing emails and phone "
+            "numbers are kept. Requires human approval."
+        ),
+        "parameters": _schema({
+            "resource_name": {"type": "string", "description": "Contact id from contacts search, e.g. people/c123."},
+            "name": {"type": "string"},
+            "email": {"type": "string", "description": "An email address to add."},
+            "phone": {"type": "string", "description": "A phone number to add."},
+            "organization": {"type": "string"},
+            "title": {"type": "string"},
+        }, ["resource_name"]),
+    },
+    {
+        "name": "google_drive_get",
+        "description": "Get one Drive file's details: name, type, owners, modified time and link. Read-only.",
+        "parameters": _schema({"file_id": {"type": "string"}}, ["file_id"]),
+    },
+    {
+        "name": "google_drive_rename",
+        "description": "Rename a Drive file. Collaborators see the new name. Requires human approval.",
+        "parameters": _schema({
+            "file_id": {"type": "string"},
+            "name": {"type": "string", "description": "The new name."},
+        }, ["file_id", "name"]),
+    },
+    {
+        "name": "google_drive_share",
+        "description": (
+            "Give one person access to a Drive file as a reader, commenter or writer. Ownership transfer "
+            "and public links are not available. Requires human approval."
+        ),
+        "parameters": _schema({
+            "file_id": {"type": "string"},
+            "email": {"type": "string", "description": "The person's email address."},
+            "role": {"type": "string", "enum": ["reader", "commenter", "writer"],
+                     "description": "Default reader."},
+            "notify": {"type": "boolean", "description": "Email the person about the share. Default false."},
+        }, ["file_id", "email"]),
+    },
 ]
+
+# ── Extended calendar, mail, docs, sheets, contacts and drive ────────────────
+
+
+def _h_calendar_search(args: dict) -> dict:
+    return services.calendar_search(
+        _text(args, "query"),
+        days=client.clamp(args.get("days"), 1, 365, 30),
+        max_results=client.clamp(args.get("max_results"), 1, 50, 10),
+    )
+
+
+def _h_calendar_update_event(args: dict) -> dict:
+    return services.calendar_update_event(
+        _required(args, "event_id"),
+        summary=_maybe_text(args, "summary"),
+        start=_text(args, "start"),
+        end=_text(args, "end"),
+        description=_maybe_text(args, "description"),
+        location=_maybe_text(args, "location"),
+        add_attendees=_emails(args, "add_attendees"),
+        timezone_name=_text(args, "timezone"),
+        send_updates=_text(args, "send_updates") or "all",
+    )
+
+
+def _h_calendar_cancel_event(args: dict) -> dict:
+    return services.calendar_cancel_event(
+        _required(args, "event_id"),
+        send_updates=_text(args, "send_updates") or "all",
+    )
+
+
+def _h_calendar_rsvp(args: dict) -> dict:
+    return services.calendar_rsvp(_required(args, "event_id"), _required(args, "response"))
+
+
+def _h_gmail_update_draft(args: dict) -> dict:
+    return services.gmail_update_draft(
+        _required(args, "draft_id"),
+        to=_required(args, "to"),
+        subject=_raw_text(args, "subject"),
+        body=_raw_text(args, "body"),
+        cc=_text(args, "cc"),
+        bcc=_text(args, "bcc"),
+    )
+
+
+def _h_gmail_forward(args: dict) -> dict:
+    return services.gmail_forward(
+        _required(args, "message_id"),
+        to=_required(args, "to"),
+        note=_text(args, "note"),
+        cc=_text(args, "cc"),
+        bcc=_text(args, "bcc"),
+    )
+
+
+def _h_docs_replace_text(args: dict) -> dict:
+    return services.docs_replace_text(
+        _required(args, "document_id"),
+        _raw_text(args, "find"),
+        _raw_text(args, "replace"),
+        match_case=_optional_flag(args, "match_case", True),
+    )
+
+
+def _h_sheets_metadata(args: dict) -> dict:
+    return services.sheets_meta(_required(args, "spreadsheet_id"))
+
+
+def _h_sheets_update_range(args: dict) -> dict:
+    return services.sheets_update_range(
+        _required(args, "spreadsheet_id"),
+        _required(args, "range"),
+        _rows(args),
+        overwrite=_flag(args, "overwrite"),
+    )
+
+
+def _h_sheets_create_tab(args: dict) -> dict:
+    return services.sheets_create_tab(_required(args, "spreadsheet_id"), _required(args, "title"))
+
+
+def _h_contacts_update(args: dict) -> dict:
+    return services.contacts_update(
+        _required(args, "resource_name"),
+        name=_text(args, "name"),
+        email=_text(args, "email"),
+        phone=_text(args, "phone"),
+        organization=_text(args, "organization"),
+        title=_text(args, "title"),
+    )
+
+
+def _h_drive_get(args: dict) -> dict:
+    return services.drive_get(_required(args, "file_id"))
+
+
+def _h_drive_rename(args: dict) -> dict:
+    return services.drive_rename(_required(args, "file_id"), _required(args, "name"))
+
+
+def _h_drive_share(args: dict) -> dict:
+    return services.drive_share(
+        _required(args, "file_id"),
+        _required(args, "email"),
+        role=_text(args, "role") or "reader",
+        notify=_flag(args, "notify"),
+    )
+
 
 _HANDLERS: dict[str, Callable[[dict], dict]] = {
     "google_search": _h_search,
@@ -639,6 +940,20 @@ _HANDLERS: dict[str, Callable[[dict], dict]] = {
     "google_email_to_event": _h_email_to_event,
     "google_invoices_to_sheet": _h_invoices_to_sheet,
     "google_organize_drive": _h_organize_drive,
+    "google_calendar_search": _h_calendar_search,
+    "google_calendar_update_event": _h_calendar_update_event,
+    "google_calendar_cancel_event": _h_calendar_cancel_event,
+    "google_calendar_rsvp": _h_calendar_rsvp,
+    "google_gmail_update_draft": _h_gmail_update_draft,
+    "google_gmail_forward": _h_gmail_forward,
+    "google_docs_replace_text": _h_docs_replace_text,
+    "google_sheets_metadata": _h_sheets_metadata,
+    "google_sheets_update_range": _h_sheets_update_range,
+    "google_sheets_create_tab": _h_sheets_create_tab,
+    "google_contacts_update": _h_contacts_update,
+    "google_drive_get": _h_drive_get,
+    "google_drive_rename": _h_drive_rename,
+    "google_drive_share": _h_drive_share,
 }
 
 _EMOJI = {
@@ -666,6 +981,20 @@ _EMOJI = {
     "google_email_to_event": "📨",
     "google_invoices_to_sheet": "🧾",
     "google_organize_drive": "🗃️",
+    "google_calendar_search": "🔍",
+    "google_calendar_update_event": "✏️",
+    "google_calendar_cancel_event": "🗑️",
+    "google_calendar_rsvp": "🙋",
+    "google_gmail_update_draft": "📝",
+    "google_gmail_forward": "↪️",
+    "google_docs_replace_text": "🔁",
+    "google_sheets_metadata": "📋",
+    "google_sheets_update_range": "🔢",
+    "google_sheets_create_tab": "🆕",
+    "google_contacts_update": "📇",
+    "google_drive_get": "📎",
+    "google_drive_rename": "🔤",
+    "google_drive_share": "🔗",
 }
 
 

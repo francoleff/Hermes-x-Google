@@ -338,6 +338,15 @@ def patch(url: str, body: Any = None, *, params: Optional[Mapping[str, Any]] = N
     return request("PATCH", url, params=params, body=body, timeout=timeout)
 
 
+def put(url: str, body: Any = None, *, params: Optional[Mapping[str, Any]] = None,
+        timeout: float = 30.0):
+    return request("PUT", url, params=params, body=body, timeout=timeout)
+
+
+def delete(url: str, *, params: Optional[Mapping[str, Any]] = None, timeout: float = 30.0):
+    return request("DELETE", url, params=params, timeout=timeout)
+
+
 # ── Small shared helpers ─────────────────────────────────────────────────────
 
 

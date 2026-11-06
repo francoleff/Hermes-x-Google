@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from hermes_google_workspace import hooks, tools
+from hermes_google_workspace import tools
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -38,6 +38,20 @@ EXPECTED_TOOLS = {
     "google_email_to_event",
     "google_invoices_to_sheet",
     "google_organize_drive",
+    "google_calendar_search",
+    "google_calendar_update_event",
+    "google_calendar_cancel_event",
+    "google_calendar_rsvp",
+    "google_gmail_update_draft",
+    "google_gmail_forward",
+    "google_docs_replace_text",
+    "google_sheets_metadata",
+    "google_sheets_update_range",
+    "google_sheets_create_tab",
+    "google_contacts_update",
+    "google_drive_get",
+    "google_drive_rename",
+    "google_drive_share",
 }
 
 

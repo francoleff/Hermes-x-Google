@@ -17,7 +17,7 @@ for _path in (ROOT, TESTS):
         sys.path.insert(0, str(_path))
 
 from fakes import FakeGoogle  # noqa: E402
-from hermes_google_workspace import client, services  # noqa: E402
+from hermes_google_workspace import client  # noqa: E402
 
 CET = timezone(timedelta(hours=1), "CET")
 

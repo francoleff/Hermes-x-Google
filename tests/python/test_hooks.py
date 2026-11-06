@@ -17,6 +17,16 @@ APPROVE_ALWAYS = {
     "google_drive_create_folder",
     "google_drive_move",
     "google_contacts_create",
+    "google_calendar_update_event",
+    "google_calendar_cancel_event",
+    "google_calendar_rsvp",
+    "google_gmail_forward",
+    "google_docs_replace_text",
+    "google_sheets_update_range",
+    "google_sheets_create_tab",
+    "google_contacts_update",
+    "google_drive_rename",
+    "google_drive_share",
 }
 
 # Writes that only ask when the caller opts in with a confirm-style flag.
@@ -39,6 +49,10 @@ NO_APPROVAL = {
     "google_docs_read",
     "google_sheets_read",
     "google_contacts_search",
+    "google_gmail_update_draft",
+    "google_calendar_search",
+    "google_sheets_metadata",
+    "google_drive_get",
 }
 
 SAMPLE_ARGS = {
@@ -55,6 +69,16 @@ SAMPLE_ARGS = {
     "google_drive_create_folder": {"name": "Projects"},
     "google_drive_move": {"file_id": "f1", "add_parents": "p1"},
     "google_contacts_create": {"name": "Ana Lopez", "email": "ana@example.com"},
+    "google_calendar_update_event": {"event_id": "e1", "start": "2026-11-13T09:00"},
+    "google_calendar_cancel_event": {"event_id": "e1"},
+    "google_calendar_rsvp": {"event_id": "e1", "response": "accepted"},
+    "google_gmail_forward": {"message_id": "m1", "to": "bo@example.com", "note": "private note"},
+    "google_docs_replace_text": {"document_id": "d1", "find": "Q3", "replace": "Q4"},
+    "google_sheets_update_range": {"spreadsheet_id": "s1", "range": "A1", "rows": [["a"]]},
+    "google_sheets_create_tab": {"spreadsheet_id": "s1", "title": "Q4"},
+    "google_contacts_update": {"resource_name": "people/c1", "email": "bo@example.com"},
+    "google_drive_rename": {"file_id": "f1", "name": "Plan"},
+    "google_drive_share": {"file_id": "f1", "email": "ana@example.com"},
 }
 
 
@@ -118,3 +142,13 @@ def test_hook_registration_uses_the_pre_tool_call_hook():
     ctx = Ctx()
     hooks.register(ctx)
     assert ctx.names == ["pre_tool_call"]
+
+
+def test_forward_approval_names_the_recipients_and_never_quotes_the_note():
+    result = hooks.pre_tool_call(
+        tool_name="google_gmail_forward",
+        args={"message_id": "m1", "to": "bo@example.com, cy@example.com", "note": "private note text"},
+    )
+    assert result["action"] == "approve"
+    assert "2 recipients" in result["message"]
+    assert "private note text" not in result["message"]

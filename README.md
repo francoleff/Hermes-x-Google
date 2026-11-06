@@ -3,11 +3,11 @@
 One place for your Google work inside Hermes Desktop, and an agent that can work across it.
 
 - **For you:** a sidebar page with Gmail, Calendar, Drive, Docs, Sheets and Contacts, plus a search that covers Gmail, Calendar and Drive at once.
-- **For Hermes:** 24 tools that read and write those services. Hermes can combine them in one task, for example "prepare me for my meeting with James tomorrow".
+- **For Hermes:** 38 tools that read and write those services. Hermes can combine them in one task, for example "prepare me for my meeting with James tomorrow".
 
 Nothing is sent, shared, created or moved until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
 
-> **Status: not yet proven against a live Google account.** The automated tests (131 Python, 15 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The desktop UI has **not** been run inside the running Hermes Desktop app, and no Google call has been made, because no OAuth client exists on the development machine. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
+> **Status: partly proven against a live Google account.** The automated tests (191 Python, 15 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. **No write has been run against Google.** The 14 newest tools are tested only against a fake Google. The desktop UI has **not** been run inside the running Hermes Desktop app. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
 
 ## What you can do
 
@@ -21,18 +21,20 @@ Nothing is sent, shared, created or moved until you approve it. Reading, searchi
 | **Sheets** | List and search, preview a range, create a sheet, add rows after review | `google_sheets_read`, `google_sheets_create`, `google_sheets_append` |
 | **Contacts** | Search, contact details, create a contact after review | `google_contacts_search`, `google_contacts_create` |
 | **Cross-app** | Meeting brief, email to event, invoices to Sheet, organise Drive | `google_meeting_brief`, `google_email_to_event`, `google_invoices_to_sheet`, `google_organize_drive` |
+| **Hermes only** (no sidebar controls yet) | Reschedule, cancel and RSVP for events; forward mail; edit a draft; replace text in a Doc; write a range and add a tab in Sheets; update a contact; rename and share Drive files; search calendar; read Drive file and Sheets metadata | the 14 tools marked *new* in the tool reference |
 | **Settings** | What Hermes can reach, live connection status, sign-in and sign-out commands | none |
 
 ### Not implemented yet
 
-These are missing, in the UI, as Hermes tools, or both:
+These are missing from the sidebar, from Hermes, or both:
 
-- **Gmail:** editing existing drafts; downloading attachments; a forward tool for Hermes (the UI's Forward opens a pre-filled compose window).
-- **Calendar:** editing, rescheduling, cancelling or deleting events; RSVP.
-- **Drive:** upload, download, rename, sharing changes; a tool that reads a file's contents (Docs and Sheets have their own read tools); a standalone new-folder action in the UI (folders are created by Organise Drive and by the Hermes tool).
-- **Docs:** updating, find-and-replace, and a metadata tool; formatting.
-- **Sheets:** updating a cell or range, creating a tab, a metadata tool; formatting.
-- **Contacts:** reading one contact by ID, updating, deleting.
+- **Newer tools in the sidebar:** the 14 tools listed as *new* in the tool reference have no controls in the sidebar yet. Hermes can use them; the UI cannot.
+- **Gmail:** downloading attachments. Attachments on a draft you update, or on a message you forward, are not kept.
+- **Calendar:** nothing beyond what the sidebar already does (agenda, details, create, clash check) in the UI.
+- **Drive:** upload and download; a tool that reads a file's contents (Docs and Sheets have their own read tools); a standalone new-folder action in the UI (folders are created by Organise Drive and by the Hermes tool).
+- **Docs:** formatting; a metadata tool.
+- **Sheets:** formatting.
+- **Contacts:** deleting; reading one contact by ID.
 - **Account:** disconnecting inside the app (sign-out is a terminal command); more than one Google account.
 - **Services:** Slides, Tasks and Forms are not built, and their feasibility has not been investigated.
 
@@ -94,13 +96,13 @@ The plugin requests exactly these scopes (`plugin.yaml`, pinned by `tests/python
 | Scope | Used for |
 |---|---|
 | `gmail.modify` | Read mail; mark read or unread, star, archive. It includes read access, so `gmail.readonly` is not requested. |
-| `gmail.send` | Send mail, after your approval |
+| `gmail.send` | Send and forward mail, after your approval |
 | `gmail.compose` | Create and update drafts |
-| `calendar.events` | Read the agenda, check for clashes, create events and send invitations after approval |
-| `drive` | Search and read files, create folders, move files after approval. The narrower `drive.file` would hide files you already have. |
-| `documents` | Read Docs; create and append text after approval |
-| `spreadsheets` | Read Sheets; create and add rows after approval |
-| `contacts` | Read and search contacts; create a contact after approval. Creating needs write access, and no narrower scope exists. |
+| `calendar.events` | Read the agenda, check for clashes, create, change, cancel and RSVP to events after approval |
+| `drive` | Search and read files; create folders, move, rename and share files after approval. The narrower `drive.file` would hide files you already have. |
+| `documents` | Read Docs; create, append text and replace text after approval |
+| `spreadsheets` | Read Sheets; create sheets, add rows, write ranges and add tabs after approval |
+| `contacts` | Read and search contacts; create or update a contact after approval. Writing needs write access, and no narrower scope exists. |
 
 The broad `https://mail.google.com/` scope is never requested. You can review or revoke access at any time under [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 
@@ -110,12 +112,12 @@ Every tool is classified in `hermes_google_workspace/hooks.py` and checked by `t
 
 | Asks you first | Runs without a prompt |
 |---|---|
-| `google_gmail_send` | All read and search tools |
-| `google_calendar_create_event` | `google_gmail_draft` (saves a draft; sends nothing) |
-| `google_docs_create`, `google_docs_append` | `google_gmail_modify` (reversible; notifies nobody) |
-| `google_sheets_create`, `google_sheets_append` | `google_calendar_check_availability` |
-| `google_drive_create_folder`, `google_drive_move` | |
-| `google_contacts_create` | |
+| `google_gmail_send`, `google_gmail_forward` | All read and search tools |
+| `google_calendar_create_event`, `google_calendar_update_event`, `google_calendar_cancel_event`, `google_calendar_rsvp` | `google_gmail_draft` (saves a draft; sends nothing) |
+| `google_docs_create`, `google_docs_append`, `google_docs_replace_text` | `google_gmail_modify` (reversible; notifies nobody) |
+| `google_sheets_create`, `google_sheets_append`, `google_sheets_update_range`, `google_sheets_create_tab` | `google_gmail_update_draft` (replaces a draft; sends nothing) |
+| `google_drive_create_folder`, `google_drive_move`, `google_drive_rename`, `google_drive_share` | `google_calendar_check_availability`, `google_calendar_search` |
+| `google_contacts_create`, `google_contacts_update` | `google_drive_get`, `google_sheets_metadata` |
 | `google_email_to_event`, `google_invoices_to_sheet`, `google_organize_drive`: only when `confirm` is true | |
 | `google_meeting_brief`: only when `save_to_docs` is true | |
 
@@ -151,6 +153,20 @@ All tools belong to the `google_workspace` toolset. A tool returns `{"ok": true,
 | `google_email_to_event` | `message_id`, `start?`, `duration_minutes?`, `confirm?` | Propose an event from an email; creates it only with `confirm`. **Asks first.** |
 | `google_invoices_to_sheet` | `query?`, `spreadsheet_id?`, `days?`, `max_results?`, `confirm?` | Preview invoice emails and their attachments; with `confirm`, add rows to a sheet. Rows already in the sheet are skipped. **Asks first.** |
 | `google_organize_drive` | `query`, `folder_name`, `max_files?`, `parent_folder_id?`, `confirm?` | Preview files matching a query; with `confirm`, create the folder and move them. **Asks first.** |
+| *new* `google_calendar_search` | `query?`, `days?`, `max_results?` | Search events by text over the next N days (default 30) |
+| *new* `google_calendar_update_event` | `event_id`, `summary?`, `start?`, `end?`, `description?`, `location?`, `add_attendees?`, `timezone?`, `send_updates?` | Change an event. A new start keeps its length; existing guests are kept. **Asks first.** |
+| *new* `google_calendar_cancel_event` | `event_id`, `send_updates?` | Delete an event; guests are told unless `send_updates` is `none`. **Asks first.** |
+| *new* `google_calendar_rsvp` | `event_id`, `response` (`accepted`, `declined`, `tentative`) | Answer an invitation as yourself; the organiser is told. **Asks first.** |
+| *new* `google_gmail_update_draft` | `draft_id`, `to`, `subject`, `body`, `cc?`, `bcc?` | Replace a draft's content. Nothing is sent. Attachments on the old draft are not kept. |
+| *new* `google_gmail_forward` | `message_id`, `to`, `note?`, `cc?`, `bcc?` | Forward a message with an optional note above the quoted original. Starts a new thread. **Asks first.** |
+| *new* `google_docs_replace_text` | `document_id`, `find`, `replace`, `match_case?` | Replace every match in a Doc and report the count. **Asks first.** |
+| *new* `google_sheets_metadata` | `spreadsheet_id` | A sheet's title, tabs and row counts. Read-only. |
+| *new* `google_sheets_update_range` | `spreadsheet_id`, `range`, `rows`, `overwrite?` | Write rows into a fixed range. Refuses when those cells already hold values, unless `overwrite` is true (at most 1,000 cells). **Asks first.** |
+| *new* `google_sheets_create_tab` | `spreadsheet_id`, `title` | Add a tab to a sheet. **Asks first.** |
+| *new* `google_contacts_update` | `resource_name`, `name?`, `email?`, `phone?`, `organization?`, `title?` | Change one contact. Existing emails and phone numbers are kept. **Asks first.** |
+| *new* `google_drive_get` | `file_id` | One file's details. Read-only. |
+| *new* `google_drive_rename` | `file_id`, `name` | Rename a file. Collaborators see the new name. **Asks first.** |
+| *new* `google_drive_share` | `file_id`, `email`, `role?` (`reader`, `commenter`, `writer`), `notify?` | Give one person access. Ownership transfer and public links are not offered. **Asks first.** |
 
 ## Cross-app workflows
 
@@ -181,7 +197,7 @@ hermes_google_workspace/
   client.py                     HTTP, retries, error mapping, Hermes credentialed bridge
   services.py                   Gmail, Calendar, Drive, Docs, Sheets, Contacts
   workflows.py                  cross-app: brief, email to event, invoices, organise Drive
-  tools.py                      the 24 Hermes tool schemas and handlers
+  tools.py                      the 38 Hermes tool schemas and handlers
   hooks.py                      pre_tool_call approval policy
 __init__.py                     register(ctx): tools and hook
 ```
@@ -191,7 +207,7 @@ Workflows call the services module and never call Google directly. Each service 
 ## Testing
 
 ```bash
-# Python: 131 tests, no network. Use Python 3.13.
+# Python: 191 tests, no network. Use Python 3.13.
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/python
 
@@ -212,13 +228,14 @@ What the tests cover:
 - **HTTP layer:** reads retry on server errors, rate limits and network failures. Writes retry only on HTTP 429 (rate limit). They never retry after a server error or a network failure, when the outcome is unknown. Also covered: missing permissions (named in the error), file-level 403s, unauthorised responses (sign in again), missing sign-in (shown as not connected), and refused origins.
 - **Services:** time zones, including daylight saving; calendar clash checks skip cancelled and declined events; Gmail header injection is neutralised; Sheets appends are capped at 500 rows and empty cells are blanked; contact validation; invoice de-duplication.
 - **Workflows:** previews write nothing; amounts are never invented; email proposals report clashes; the brief gathers evidence from all three services; saving a brief asks first.
+- **Extended writes:** the new writes are checked against the exact request Google receives (method, URL and body). Each refusal is checked to happen before any write reaches Google. Some refusals come after a read, such as an all-day event that cannot be moved to a time.
 - **Contract:** the exact tool set, in one toolset; the approval classification; the manifest's scopes.
 - **API:** consequential write routes refuse requests without `confirm`, and `confirm` must be `true`, not merely present.
 - **UI (jsdom):** registration; the connect gate (no account data is fetched before sign-in); lazy tabs; keyboard tab navigation; review-then-confirm for sheet rows, with cancel; contact validation; reversible star; permission errors in plain language; cross-service search; the calendar clash warning; a success notice after an append; no hard-coded colours; every write call sends `confirm: true` except drafts and reversible label changes.
 
-Two deliberate breakages were tested and caught by the suite: removing `confirm: true` from the Sheets append, and making the review button write without review. Both made tests fail. The plugin file was restored byte-for-byte afterwards.
+Two deliberate breakages were tested and caught by the suite: removing `confirm: true` from the Sheets append, and making the review button write without review. Both made tests fail. The plugin file was restored byte-for-byte afterwards. For the newer tools, twelve safety checks were removed one at a time (eleven in the service layer, one in the approval hook). The suite caught each one, and each file was restored byte-for-byte.
 
-**Not covered by any test:** dark and light appearance, responsive layout, keyboard focus order beyond tab navigation, screen-reader behaviour, and real Google calls.
+**Not covered by any test:** dark and light appearance, responsive layout, keyboard focus order beyond tab navigation, screen-reader behaviour, and real Google calls. The newer tools also have no UI tests, because they have no UI yet.
 
 ## Live check: what to run with your own account
 
@@ -231,11 +248,14 @@ The automated suite cannot prove Google accepts these calls. Run this once, in a
 5. Contacts: create a test contact with an email address you control, and check it in Google Contacts.
 6. Hermes chat: "Prepare a meeting brief for my next meeting", approve the Doc, and open it.
 
+The newer write tools have not been run against Google. Before you rely on them, try each one in a test account: reschedule and cancel a test event; RSVP to a test invitation; forward a test message to yourself; edit a test draft; replace a phrase in a test Doc; write an empty range in a test sheet and add a tab; update a test contact; rename and share a test file with yourself.
+
 Report any step that fails, with the message shown in the UI. A permission error names the missing permission; sign in again to grant it.
 
 ## Limitations
 
 - **Unverified against Google.** See the status note at the top. Google's own errors (quotas, disabled APIs, verification) are shown as received.
+- **Newer write tools are tested against a fake Google only.** Only their read paths (calendar search, Drive file, Sheets metadata) were run against a real account.
 - **Not run inside Hermes Desktop.** Discovery, registration and validation were checked in an isolated profile. The desktop UI has been tested in jsdom only.
 - **Sign-in is terminal-only.** Plugins have no in-app sign-in, sign-out or disconnect in Hermes today, so the plugin shows the commands and checks the result.
 - **One Google account per Hermes profile.**

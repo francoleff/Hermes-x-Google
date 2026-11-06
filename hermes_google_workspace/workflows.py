@@ -8,7 +8,7 @@ the default path is read-only and the agent can show the plan first.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from email.utils import getaddresses
 from typing import Any, Optional
 
