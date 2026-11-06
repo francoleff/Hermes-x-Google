@@ -16,7 +16,7 @@ Nothing is sent, shared, created or moved until you approve it. Reading, searchi
 | **Overview** | Unread count, today's agenda, recent files, workflow cards (meeting brief, invoices to Sheet, organise Drive), and a search across Gmail, Calendar and Drive | `google_search` |
 | **Gmail** | Inbox and search, read a message, mark read or unread, star, archive, compose, reply, forward, create an event from a message | `google_gmail_search`, `google_gmail_read`, `google_gmail_send`, `google_gmail_draft`, `google_gmail_modify` |
 | **Calendar** | Agenda, event details, new event with a live clash warning, meeting brief | `google_calendar_agenda`, `google_calendar_check_availability`, `google_calendar_create_event` |
-| **Drive** | Recent files, search, filter by Docs, Sheets or Folders, file details, new folder, move files into a folder | `google_drive_search`, `google_drive_create_folder`, `google_drive_move` |
+| **Drive** | Recent files, search with Docs, Sheets and Folders filters, file details, Organise Drive (preview, then move files into one folder) | `google_drive_search`, `google_drive_create_folder`, `google_drive_move` |
 | **Docs** | List and search, read text, create, append text | `google_docs_read`, `google_docs_create`, `google_docs_append` |
 | **Sheets** | List and search, preview a range, create a sheet, add rows after review | `google_sheets_read`, `google_sheets_create`, `google_sheets_append` |
 | **Contacts** | Search, contact details, create a contact after review | `google_contacts_search`, `google_contacts_create` |
@@ -29,7 +29,7 @@ These are missing, in the UI, as Hermes tools, or both:
 
 - **Gmail:** editing existing drafts; downloading attachments; a forward tool for Hermes (the UI's Forward opens a pre-filled compose window).
 - **Calendar:** editing, rescheduling, cancelling or deleting events; RSVP.
-- **Drive:** upload, download, rename, sharing changes; a tool that reads a file's contents (Docs and Sheets have their own read tools).
+- **Drive:** upload, download, rename, sharing changes; a tool that reads a file's contents (Docs and Sheets have their own read tools); a standalone new-folder action in the UI (folders are created by Organise Drive and by the Hermes tool).
 - **Docs:** updating, find-and-replace, and a metadata tool; formatting.
 - **Sheets:** updating a cell or range, creating a tab, a metadata tool; formatting.
 - **Contacts:** reading one contact by ID, updating, deleting.
