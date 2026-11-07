@@ -558,8 +558,8 @@ def calendar_month(month: str = "", max_results: int = 200, calendar_id: str = "
     else:
         today = now_utc()
         year, mon = today.year, today.month
-    start = datetime(year, mon, 1, tzinfo=timezone.utc)
-    end = datetime(year + (mon == 12), (mon % 12) + 1, 1, tzinfo=timezone.utc)
+    start = datetime(year, mon, 1, tzinfo=timezone.utc) - timedelta(days=1)
+    end = datetime(year + (mon == 12), (mon % 12) + 1, 1, tzinfo=timezone.utc) + timedelta(days=1)
     payload, _ = get(
         _calendar_url(calendar_id),
         params={

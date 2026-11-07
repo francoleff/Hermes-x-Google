@@ -954,7 +954,7 @@ const WidgetFrame = forwardRef(function WidgetFrame({ def, editing, dragging, dr
               background: 'transparent', color: 'var(--ui-text-tertiary)', cursor: 'grab', font: 'inherit',
               touchAction: 'none',
             },
-            children: jsx(Icon, { name: 'grip-vertical', size: '0.9rem' }),
+            children: jsx(Icon, { name: 'gripper', size: '0.9rem' }),
           }),
           jsx(WidgetButton, { icon: 'close', label: `Hide ${def.label}`, onClick: () => onHide(def.id) }),
         ],
