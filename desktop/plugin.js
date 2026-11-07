@@ -305,6 +305,27 @@ function Icon({ name, size = '1rem', color, style }) {
   return jsx(Codicon, { name, size, style: { color, ...style } })
 }
 
+// The Google "G" mark. Used in the page header, the setup hero and — on Hermes builds
+// that support a custom sidebar-nav icon — the sidebar row itself. The four colours are
+// the brand's; the mark never takes the surrounding text colour.
+function GoogleG({ className, size = '1rem' }) {
+  return jsx('svg', {
+    className,
+    viewBox: '0 0 48 48',
+    width: size,
+    height: size,
+    'aria-hidden': 'true',
+    focusable: 'false',
+    style: { display: 'block', flexShrink: 0 },
+    children: [
+      jsx('path', { key: 'blue', fill: '#4285F4', d: 'M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z' }),
+      jsx('path', { key: 'green', fill: '#34A853', d: 'M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z' }),
+      jsx('path', { key: 'yellow', fill: '#FBBC05', d: 'M11.69 28.18c-.44-1.32-.69-2.73-.69-4.18s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z' }),
+      jsx('path', { key: 'red', fill: '#EA4335', d: 'M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z' }),
+    ],
+  })
+}
+
 function Spinner({ size = '0.9rem' }) {
   return jsx(Codicon, { name: 'refresh', size, spinning: true })
 }
@@ -464,7 +485,7 @@ function SetupView({ status, onRetry, retrying }) {
       jsxs('div', { style: { display: 'flex', gap: '0.9rem', alignItems: 'flex-start' }, children: [
         jsx('div', {
           style: { width: '2.6rem', height: '2.6rem', borderRadius: '12px', display: 'grid', placeItems: 'center', flexShrink: 0, background: 'color-mix(in srgb, var(--ui-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--ui-accent) 22%, transparent)' },
-          children: jsx(Icon, { name: 'cloud', size: '1.15rem', color: 'var(--ui-accent)' }),
+          children: jsx(GoogleG, { size: '1.3rem' }),
         }),
         jsxs('div', { style: { minWidth: 0 }, children: [
           jsx('h2', { style: { margin: 0, fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }, children: 'Connect Google Workspace' }),
@@ -706,76 +727,219 @@ function GlobalSearch({ onOpenMessage, onOpenEvent, onOpenFile }) {
   ] })
 }
 
+// ── Overview widgets ─────────────────────────────────────────────────────────
+// The home tab is a grid of widgets. The arrangement — order and which widgets are
+// hidden — is saved per profile through ctx.storage, so each person keeps their own.
+
+const WIDGET_DEFS = [
+  { id: 'search', label: 'Search', span: 'full' },
+  { id: 'stats', label: 'At a glance', span: 'full' },
+  { id: 'agenda', label: 'Today and tomorrow', span: 'half' },
+  { id: 'inbox', label: 'Inbox', span: 'half' },
+  { id: 'drive', label: 'Recent Drive files', span: 'half' },
+  { id: 'workflows', label: 'Workflows', span: 'half' },
+]
+
+const DEFAULT_LAYOUT = { order: WIDGET_DEFS.map((def) => def.id), hidden: [] }
+
+const widgetDef = (id) => WIDGET_DEFS.find((def) => def.id === id) || WIDGET_DEFS[0]
+
+// Keep the stored layout valid: only known widget ids, every widget present exactly
+// once, and `hidden` a subset of `order`. A corrupt or old value falls back to default.
+function normalizeLayout(value) {
+  if (!value || !Array.isArray(value.order)) return null
+  const order = value.order.filter((id) => WIDGET_DEFS.some((def) => def.id === id))
+  for (const def of WIDGET_DEFS) if (!order.includes(def.id)) order.push(def.id)
+  const hidden = Array.isArray(value.hidden) ? value.hidden.filter((id) => order.includes(id)) : []
+  return { order, hidden }
+}
+
+function readStoredLayout() {
+  try {
+    return normalizeLayout(pluginCtx?.storage?.get?.('overview.layout', null)) || DEFAULT_LAYOUT
+  } catch {
+    return DEFAULT_LAYOUT
+  }
+}
+
+function useOverviewLayout() {
+  const [layout, setLayout] = useState(readStoredLayout)
+  const save = (next) => {
+    const clean = normalizeLayout(next) || DEFAULT_LAYOUT
+    setLayout(clean)
+    try { pluginCtx?.storage?.set?.('overview.layout', clean) } catch { /* storage is optional */ }
+  }
+  return [layout, save]
+}
+
+function WidgetButton({ icon, label, onClick }) {
+  return jsx('button', {
+    type: 'button',
+    onClick,
+    'aria-label': label,
+    title: label,
+    style: {
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: '1.4rem', height: '1.4rem', padding: 0, border: 0, borderRadius: '5px',
+      background: 'transparent', color: 'var(--ui-text-tertiary)', cursor: 'pointer', font: 'inherit',
+    },
+    onMouseEnter: (event) => { event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
+    onMouseLeave: (event) => { event.currentTarget.style.background = 'transparent' },
+    children: jsx(Icon, { name: icon, size: '0.8rem' }),
+  })
+}
+
+// Placeholder shown while the overview is loading. It keeps the grid's shape so the
+// widgets do not jump when the data arrives.
+function WidgetSkeleton({ rows = 3 }) {
+  return jsxs('div', {
+    style: { ...surfaceStyle, padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.55rem' },
+    children: [
+      jsx(Skeleton, { style: { height: '0.95rem', width: '38%', borderRadius: '6px' } }),
+      ...Array.from({ length: rows }, (_, index) => jsx(Skeleton, { style: { height: '1.9rem', width: '100%', borderRadius: '6px' } }, index)),
+    ],
+  })
+}
+
+// A widget plus, in edit mode, the controls that rearrange it. The toolbar floats over
+// the widget's corner so it never pushes the content around.
+function WidgetFrame({ def, editing, onMove, onHide, children }) {
+  return jsxs('div', {
+    'data-widget-id': def.id,
+    style: {
+      gridColumn: def.span === 'full' ? '1 / -1' : undefined,
+      position: 'relative',
+      minWidth: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      outline: editing ? '1px dashed color-mix(in srgb, var(--ui-stroke-secondary) 90%, transparent)' : undefined,
+      outlineOffset: editing ? '3px' : undefined,
+      borderRadius: editing ? '12px' : undefined,
+    },
+    children: [
+      children,
+      editing ? jsxs('div', {
+        style: {
+          position: 'absolute', top: '0.4rem', right: '0.4rem', zIndex: 3,
+          display: 'flex', gap: '0.1rem', padding: '0.12rem',
+          background: 'var(--ui-bg-secondary)', border: '1px solid var(--ui-stroke-secondary)',
+          borderRadius: '8px',
+        },
+        children: [
+          jsx(WidgetButton, { icon: 'chevron-up', label: `Move ${def.label} earlier`, onClick: () => onMove(def.id, -1) }),
+          jsx(WidgetButton, { icon: 'chevron-down', label: `Move ${def.label} later`, onClick: () => onMove(def.id, 1) }),
+          jsx(WidgetButton, { icon: 'close', label: `Hide ${def.label}`, onClick: () => onHide(def.id) }),
+        ],
+      }) : null,
+    ],
+  })
+}
+
 function OverviewTab({ status, overview, onOpenMessage, onOpenEvent, onOpenFile, onCompose, onEvent, onBrief, onOrganize, onInvoices }) {
   const data = overview.data || {}
   const errors = data.errors || {}
   const nextEvent = (data.events || [])[0]
   const unread = data.unread || 0
+  const [layout, saveLayout] = useOverviewLayout()
+  const [editing, setEditing] = useState(false)
+
+  const visible = layout.order.filter((id) => !layout.hidden.includes(id))
+  const hiddenDefs = WIDGET_DEFS.filter((def) => layout.hidden.includes(def.id))
+
+  function move(id, delta) {
+    const index = layout.order.indexOf(id)
+    const target = index + delta
+    if (index < 0 || target < 0 || target >= layout.order.length) return
+    const order = [...layout.order]
+    ;[order[index], order[target]] = [order[target], order[index]]
+    saveLayout({ ...layout, order })
+  }
+  function hide(id) { saveLayout({ ...layout, hidden: [...layout.hidden, id] }) }
+  function show(id) { saveLayout({ ...layout, hidden: layout.hidden.filter((item) => item !== id) }) }
+  function resetLayout() { saveLayout(DEFAULT_LAYOUT) }
+
+  const loading = overview.isPending
+  const failed = overview.isError
+
+  function renderWidget(id) {
+    // Search and workflows read nothing from the overview, so they are always available.
+    if (id === 'search') return jsx(GlobalSearch, { onOpenMessage, onOpenEvent, onOpenFile })
+    if (id === 'workflows') return jsxs(Panel, { style: { padding: '0.8rem' }, children: [
+      jsx(SectionHeading, { title: 'Workflows', detail: 'The cross-app part' }),
+      jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))', gap: '0.5rem' }, children: [
+        jsx(WorkflowCard, { icon: 'note', title: 'Meeting brief', detail: 'Attendees, recent threads, related files, and an agenda in one page.', action: 'Pick a meeting →', onClick: () => onBrief(null) }),
+        jsx(WorkflowCard, { icon: 'calendar', title: 'Email → event', detail: 'Read a date from a message and create the invitation.', action: 'Start from Gmail →', onClick: () => onOpenMessage(null) }),
+        jsx(WorkflowCard, { icon: 'table', title: 'Invoices → Sheet', detail: 'Find invoice attachments and append a reviewable row per file.', action: 'Scan inbox →', onClick: onInvoices }),
+        jsx(WorkflowCard, { icon: 'folder', title: 'Organize Drive', detail: 'Preview matching files, then move them into one folder.', action: 'Build a move plan →', onClick: onOrganize }),
+      ] }),
+    ] })
+    if (loading) return jsx(WidgetSkeleton, { rows: id === 'stats' ? 3 : 4 })
+    if (failed) return jsx(InlineError, { error: overview.error, onRetry: overview.refetch })
+    if (id === 'stats') return jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(11rem, 1fr))', gap: '0.6rem' }, children: [
+      jsx(StatCard, { icon: 'mail', label: 'Unread', value: unread, detail: unread ? 'Waiting in your inbox' : 'Inbox is clear', onClick: () => onOpenMessage(null) }),
+      jsx(StatCard, { icon: 'calendar', label: 'Next up', value: nextEvent ? fmtTime(nextEvent.start) : '—', detail: nextEvent ? nextEvent.summary : 'No events in the next day', onClick: () => onOpenEvent(nextEvent || null) }),
+      jsx(StatCard, { icon: 'cloud', label: 'Recent files', value: (data.files || []).length, detail: 'Changed in Drive', onClick: () => onOpenFile(null) }),
+    ] })
+    if (id === 'agenda') return jsxs(Panel, { style: { padding: '0.7rem' }, children: [
+      jsx(SectionHeading, { title: 'Today and tomorrow', detail: (data.events || []).length ? `${(data.events || []).length} event${(data.events || []).length === 1 ? '' : 's'}` : '', action: jsx(LinkAction, { icon: 'calendar', onClick: () => onOpenEvent(null), children: 'Calendar' }) }),
+      errors.calendar ? jsx(InlineError, { error: errors.calendar, onRetry: overview.refetch }) : null,
+      (data.events || []).length
+        ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.1rem' }, children: (data.events || []).slice(0, 6).map((event) => jsx(EventRow, { event, onClick: () => onOpenEvent(event), showDay: true }, event.id)) })
+        : !errors.calendar ? jsx(EmptyBlock, { icon: 'calendar', title: 'No meetings on the horizon', description: 'Enjoy the quiet, or put something on the calendar.', action: jsx(Button, { variant: 'outline', size: 'xs', onClick: onEvent, children: 'New event' }) }) : null,
+    ] })
+    if (id === 'inbox') return jsxs(Panel, { style: { padding: '0.7rem' }, children: [
+      jsx(SectionHeading, { title: 'Inbox', detail: unread ? `${unread} unread` : 'All read', action: jsx(LinkAction, { icon: 'mail', onClick: () => onOpenMessage(null), children: 'Gmail' }) }),
+      errors.gmail_inbox ? jsx(InlineError, { error: errors.gmail_inbox, onRetry: overview.refetch }) : null,
+      (data.messages || []).length
+        ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: (data.messages || []).map((message) => jsx(MessageRow, { message, onClick: () => onOpenMessage(message.id) }, message.id)) })
+        : !errors.gmail_inbox ? jsx(EmptyBlock, { icon: 'mail', title: 'Nothing new', description: 'The inbox is quiet.' }) : null,
+    ] })
+    return jsxs(Panel, { style: { padding: '0.7rem' }, children: [
+      jsx(SectionHeading, { title: 'Recent Drive files', detail: 'Most recently modified', action: jsx(LinkAction, { icon: 'cloud', onClick: () => onOpenFile(null), children: 'Drive' }) }),
+      errors.drive ? jsx(InlineError, { error: errors.drive, onRetry: overview.refetch }) : null,
+      (data.files || []).length
+        ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: (data.files || []).map((file) => jsx(FileRow, { file, onClick: () => onOpenFile(file) }, file.id)) })
+        : !errors.drive ? jsx(EmptyBlock, { icon: 'cloud', title: 'No files yet', description: 'Files you own or can edit show up here.' }) : null,
+    ] })
+  }
+
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '1.5rem' }, children: [
     jsx(PageHeading, {
       title: 'Your Google work, without the tab hunt',
       subtitle: status?.account ? `Signed in as ${status.account}. Reads are automatic; sends and shares wait for you.` : 'Reads are automatic; sends and shares wait for you.',
       actions: [
-        jsx(Button, { variant: 'outline', size: 'sm', onClick: onCompose, children: 'Compose' }),
-        jsx(Button, { variant: 'ghost', size: 'sm', onClick: onEvent, children: 'New event' }),
+        jsx(Button, { key: 'customize', variant: editing ? 'secondary' : 'outline', size: 'sm', onClick: () => setEditing((value) => !value), children: editing ? 'Done' : 'Customize' }),
+        jsx(Button, { key: 'compose', variant: 'outline', size: 'sm', onClick: onCompose, children: 'Compose' }),
+        jsx(Button, { key: 'event', variant: 'ghost', size: 'sm', onClick: onEvent, children: 'New event' }),
       ],
     }),
 
-    jsx(GlobalSearch, { onOpenMessage, onOpenEvent, onOpenFile }),
+    jsxs('div', {
+      style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gridAutoFlow: 'dense', gap: '0.8rem', alignItems: 'start' },
+      children: [
+        ...visible.map((id) => jsx(WidgetFrame, {
+          def: widgetDef(id),
+          editing,
+          onMove: move,
+          onHide: hide,
+          children: renderWidget(id),
+        }, id)),
+        editing && hiddenDefs.length ? jsxs('div', {
+          style: { gridColumn: '1 / -1', display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center', padding: '0.6rem 0.7rem', borderRadius: '10px', border: '1px dashed color-mix(in srgb, var(--ui-stroke-secondary) 80%, transparent)' },
+          children: [
+            jsx('span', { style: { fontSize: '0.72rem', color: 'var(--ui-text-tertiary)' }, children: 'Hidden widgets' }),
+            ...hiddenDefs.map((def) => jsx(Button, { variant: 'outline', size: 'xs', onClick: () => show(def.id), children: `Add ${def.label}` }, def.id)),
+            jsx(Button, { variant: 'ghost', size: 'xs', onClick: resetLayout, children: 'Reset to default' }),
+          ],
+        }, 'hidden-widgets') : null,
+      ],
+    }),
 
-    overview.isPending ? jsx(LoadingBlock, { label: 'Gathering unread mail, today’s agenda, and recent files…', rows: 4 })
-      : overview.isError ? jsx(InlineError, { error: overview.error, onRetry: overview.refetch })
-      : jsxs(Fragment, { children: [
-        jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(11rem, 1fr))', gap: '0.6rem' }, children: [
-          jsx(StatCard, { icon: 'mail', label: 'Unread', value: unread, detail: unread ? 'Waiting in your inbox' : 'Inbox is clear', onClick: () => onOpenMessage(null) }),
-          jsx(StatCard, { icon: 'calendar', label: 'Next up', value: nextEvent ? fmtTime(nextEvent.start) : '—', detail: nextEvent ? nextEvent.summary : 'No events in the next day', onClick: () => onOpenEvent(nextEvent || null) }),
-          jsx(StatCard, { icon: 'cloud', label: 'Recent files', value: (data.files || []).length, detail: 'Changed in Drive', onClick: () => onOpenFile(null) }),
-        ] }),
-
-        jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 0.85fr)', gap: '0.8rem', alignItems: 'start' }, children: [
-          jsxs(Panel, { style: { padding: '0.7rem' }, children: [
-            jsx(SectionHeading, { title: 'Today and tomorrow', detail: (data.events || []).length ? `${(data.events || []).length} event${(data.events || []).length === 1 ? '' : 's'}` : '', action: jsx(LinkAction, { icon: 'calendar', onClick: () => onOpenEvent(null), children: 'Calendar' }) }),
-            errors.calendar ? jsx(InlineError, { error: errors.calendar, onRetry: overview.refetch }) : null,
-            (data.events || []).length
-              ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.1rem' }, children: (data.events || []).slice(0, 6).map((event) => jsx(EventRow, { event, onClick: () => onOpenEvent(event), showDay: true }, event.id)) })
-              : !errors.calendar ? jsx(EmptyBlock, { icon: 'calendar', title: 'No meetings on the horizon', description: 'Enjoy the quiet, or put something on the calendar.', action: jsx(Button, { variant: 'outline', size: 'xs', onClick: onEvent, children: 'New event' }) }) : null,
-          ] }),
-
-          jsxs(Panel, { style: { padding: '0.7rem' }, children: [
-            jsx(SectionHeading, { title: 'Inbox', detail: unread ? `${unread} unread` : 'All read', action: jsx(LinkAction, { icon: 'mail', onClick: () => onOpenMessage(null), children: 'Gmail' }) }),
-            errors.gmail_inbox ? jsx(InlineError, { error: errors.gmail_inbox, onRetry: overview.refetch }) : null,
-            (data.messages || []).length
-              ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: (data.messages || []).map((message) => jsx(MessageRow, { message, onClick: () => onOpenMessage(message.id) }, message.id)) })
-              : !errors.gmail_inbox ? jsx(EmptyBlock, { icon: 'mail', title: 'Nothing new', description: 'The inbox is quiet.' }) : null,
-          ] }),
-        ] }),
-
-        jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.8rem', alignItems: 'start' }, children: [
-          jsxs(Panel, { style: { padding: '0.7rem' }, children: [
-            jsx(SectionHeading, { title: 'Recent Drive files', detail: 'Most recently modified', action: jsx(LinkAction, { icon: 'cloud', onClick: () => onOpenFile(null), children: 'Drive' }) }),
-            errors.drive ? jsx(InlineError, { error: errors.drive, onRetry: overview.refetch }) : null,
-            (data.files || []).length
-              ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: (data.files || []).map((file) => jsx(FileRow, { file, onClick: () => onOpenFile(file) }, file.id)) })
-              : !errors.drive ? jsx(EmptyBlock, { icon: 'cloud', title: 'No files yet', description: 'Files you own or can edit show up here.' }) : null,
-          ] }),
-
-          jsxs(Panel, { style: { padding: '0.8rem' }, children: [
-            jsx(SectionHeading, { title: 'Workflows', detail: 'The cross-app part' }),
-            jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))', gap: '0.5rem' }, children: [
-              jsx(WorkflowCard, { icon: 'note', title: 'Meeting brief', detail: 'Attendees, recent threads, related files, and an agenda in one page.', action: 'Pick a meeting →', onClick: () => onBrief(null) }),
-              jsx(WorkflowCard, { icon: 'calendar', title: 'Email → event', detail: 'Read a date from a message and create the invitation.', action: 'Start from Gmail →', onClick: () => onOpenMessage(null) }),
-              jsx(WorkflowCard, { icon: 'table', title: 'Invoices → Sheet', detail: 'Find invoice attachments and append a reviewable row per file.', action: 'Scan inbox →', onClick: onInvoices }),
-              jsx(WorkflowCard, { icon: 'folder', title: 'Organize Drive', detail: 'Preview matching files, then move them into one folder.', action: 'Build a move plan →', onClick: onOrganize }),
-            ] }),
-          ] }),
-        ] }),
-
-        jsx('div', { style: { fontSize: '0.69rem', color: 'var(--ui-text-quaternary)', display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }, children: [
-          jsx('span', { children: `Snapshot ${fmtTime(data.generatedAt)}` }),
-          jsx('span', { children: '·' }),
-          jsx(LinkAction, { icon: 'shield', onClick: () => openUrl('https://myaccount.google.com/permissions'), children: 'Manage Google access' }),
-        ] }),
-      ] }),
+    jsx('div', { style: { fontSize: '0.69rem', color: 'var(--ui-text-quaternary)', display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }, children: [
+      jsx('span', { children: `Snapshot ${fmtTime(data.generatedAt)}` }),
+      jsx('span', { children: '·' }),
+      jsx(LinkAction, { icon: 'shield', onClick: () => openUrl('https://myaccount.google.com/permissions'), children: 'Manage Google access' }),
+    ] }),
   ] })
 }
 
@@ -3080,7 +3244,7 @@ function GoogleWorkspacePage() {
     children: [
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'space-between' }, children: [
         jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }, children: [
-          jsx(Icon, { name: 'globe', size: '1rem', color: 'var(--ui-accent)' }),
+          jsx(GoogleG, { size: '1.05rem' }),
           jsx('h1', { style: { margin: 0, fontSize: '0.95rem', fontWeight: 650 }, children: 'Google Workspace' }),
           connected && status.data?.account ? jsx('span', { style: { fontSize: '0.72rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: status.data.account }) : null,
         ] }),
@@ -3124,7 +3288,7 @@ export default {
       id: 'nav',
       area: SIDEBAR_NAV_AREA,
       order: 60,
-      data: { codicon: 'globe', label: 'Google Workspace', path: PAGE_PATH },
+      data: { codicon: 'globe', label: 'Google Workspace', path: PAGE_PATH, icon: GoogleG },
     })
     ctx.register({
       id: 'open',

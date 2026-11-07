@@ -69,6 +69,15 @@ function fakeContext(routes) {
     onDispose: () => {},
     i18n: { register: () => {}, t: (key) => key },
     os: { openExternal: vi.fn(async () => true), writeClipboard: vi.fn(async () => true) },
+    // Mirrors the real PluginStorage contract: synchronous get with a required fallback.
+    storage: (() => {
+      const data = new Map()
+      return {
+        get: (key, fallback) => (data.has(key) ? data.get(key) : fallback),
+        set: (key, value) => data.set(key, value),
+        remove: (key) => data.delete(key),
+      }
+    })(),
   }
 }
 
@@ -96,6 +105,8 @@ async function until(check, description) {
 const tabs = () => [...container.querySelectorAll('[role="tab"]')]
 const tab = (label) => tabs().find((node) => node.textContent.trim() === label)
 const button = (label, scope = container) => [...scope.querySelectorAll('button')].find((node) => node.textContent.trim() === label) || null
+const labelledButton = (label) => [...container.querySelectorAll('button')].find((node) => node.getAttribute('aria-label') === label) || null
+const widgetOrder = () => [...container.querySelectorAll('[data-widget-id]')].map((node) => node.getAttribute('data-widget-id'))
 const rowButton = (text) => [...container.querySelectorAll('button')].find((node) => node.textContent.includes(text)) || null
 const dialog = () => document.querySelector('[role="alertdialog"]')
 const writes = (ctx) => ctx.rest.mock.calls.filter(([, options]) => options?.method === 'POST')
@@ -436,9 +447,68 @@ describe('settings', () => {
   })
 })
 
+describe('overview widgets', () => {
+  const DEFAULT_ORDER = ['search', 'stats', 'agenda', 'inbox', 'drive', 'workflows']
+
+  it('reorders, hides, restores and resets widgets, and saves the arrangement', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => container.textContent.includes('Today and tomorrow'), 'the overview widgets')
+    expect(widgetOrder()).toEqual(DEFAULT_ORDER)
+
+    await click(button('Customize'))
+    await until(() => labelledButton('Hide Workflows'), 'the edit controls')
+
+    // Hiding a widget removes it from the grid and records it.
+    await click(labelledButton('Hide Workflows'))
+    await until(() => !container.textContent.includes('The cross-app part'), 'the hidden widget')
+    expect(widgetOrder()).toEqual(['search', 'stats', 'agenda', 'inbox', 'drive'])
+    expect(ctx.storage.get('overview.layout', null).hidden).toEqual(['workflows'])
+
+    // Moving a widget earlier swaps it with its neighbour.
+    await click(labelledButton('Move Inbox earlier'))
+    expect(widgetOrder()).toEqual(['search', 'stats', 'inbox', 'agenda', 'drive'])
+
+    // Resetting restores the default arrangement.
+    await click(button('Reset to default'))
+    await until(() => container.textContent.includes('The cross-app part'), 'the restored widget')
+    expect(widgetOrder()).toEqual(DEFAULT_ORDER)
+    expect(ctx.storage.get('overview.layout', null).hidden).toEqual([])
+  })
+
+  it('restores a stored arrangement on the next visit', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    ctx.storage.set('overview.layout', {
+      order: ['workflows', 'search', 'stats', 'agenda', 'inbox', 'drive'],
+      hidden: ['agenda', 'inbox', 'drive'],
+    })
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => container.textContent.includes('The cross-app part'), 'the stored layout')
+    expect(widgetOrder()).toEqual(['workflows', 'search', 'stats'])
+  })
+
+  it('ignores a corrupt stored layout and falls back to the default', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    ctx.storage.set('overview.layout', { order: ['nonsense'], hidden: 'not-a-list' })
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => container.textContent.includes('Today and tomorrow'), 'the default layout')
+    expect(widgetOrder()).toEqual(DEFAULT_ORDER)
+  })
+})
+
 describe('source guards', () => {
-  it('uses theme variables instead of hard-coded colours', () => {
-    expect(PLUGIN_SOURCE.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
+  it('uses theme variables instead of hard-coded colours, except the Google brand mark', () => {
+    // The four colours below are the Google "G" logo. They are the brand's, not a
+    // theme value, and the mark must not be recoloured by the surrounding text.
+    const allowed = ['#4285F4', '#34A853', '#FBBC05', '#EA4335']
+    const found = PLUGIN_SOURCE.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []
+    expect(found.filter((colour) => !allowed.includes(colour))).toEqual([])
   })
 
   it('sends confirm: true from every write except drafts and reversible label changes', () => {

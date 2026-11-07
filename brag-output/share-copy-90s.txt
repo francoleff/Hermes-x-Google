@@ -1,0 +1,4 @@
+Your Google work, without the tab hunt. Google Workspace for Hermes puts Gmail, Calendar, Drive, Docs, Sheets and Contacts in the Hermes sidebar, and gives the agent 38 tools to work across them: meeting briefs, email → events with a live clash check, invoices → Sheets, Drive cleanup, and multi-step asks like "forward this to Lena, add her to the review and share the plan". 23 of those tools ask before they write.
+
+---
+Credits (keep with the video): Music: "Pop Track 03" by Lily J (Mixkit, Mixkit Stock Music Free License). Sound effects: Mixkit (Mixkit Sound Effects Free License) and Kenney keyboard samples (CC0). Google product icons are trademarks of Google LLC. All names, emails, files and amounts shown are fictional.

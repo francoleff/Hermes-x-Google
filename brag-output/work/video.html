@@ -1,0 +1,704 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --fg: #17171a; --muted: #6b6f7a; --faint: #9aa0ab; --line: #e6e9f0;
+    --primary: #0053fd; --bg: #f8faff; --sidebar: #f2f4f9; --card: #ffffff;
+    --g-blue: #4285f4; --g-red: #ea4335; --g-yellow: #fbbc04; --g-green: #34a853;
+    --head: 'Google Sans Flex', system-ui, sans-serif;
+    --ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  #stage { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden;
+    background: #f3f5fa; font-family: var(--ui); color: var(--fg); -webkit-font-smoothing: antialiased; }
+  .abs { position: absolute; }
+  #dots { position: absolute; inset: -40px; background-image: radial-gradient(#c9cfdc 1.2px, transparent 1.3px);
+    background-size: 32px 32px; opacity: .55; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, rgba(243,245,250,0) 55%, rgba(226,231,242,.9) 100%); }
+
+  /* ── Headlines ─────────────────────────────── */
+  .headline { position: absolute; font-family: var(--head); font-weight: 680; letter-spacing: -0.035em;
+    color: var(--fg); line-height: 1.02; white-space: nowrap; }
+  .word { display: inline-block; will-change: transform, opacity; }
+  .gbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+  .gbar i { flex: 1; } .gbar i:nth-child(1){background:var(--g-blue)} .gbar i:nth-child(2){background:var(--g-red)}
+  .gbar i:nth-child(3){background:var(--g-yellow)} .gbar i:nth-child(4){background:var(--g-green)}
+
+  /* ── Scene 1: tabs ─────────────────────────── */
+  .tabwin { position: absolute; width: 440px; height: 286px; background: #fff; border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(20,24,40,.06), 0 18px 50px -12px rgba(20,24,40,.22); overflow: hidden;
+    border: 1px solid rgba(20,24,40,.06); }
+  .tabwin .strip { height: 46px; background: #e9ecf3; display: flex; align-items: flex-end; padding: 0 10px; gap: 6px; }
+  .tabwin .tab { height: 36px; background: #fff; border-radius: 10px 10px 0 0; padding: 0 14px; display: flex;
+    align-items: center; gap: 9px; font-size: 15px; font-weight: 500; color: #3c4043; width: 300px; }
+  .tabwin .tab img { width: 18px; height: 18px; object-fit: contain; }
+  .tabwin .tab span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .tabwin .dot3 { margin-left: auto; display: flex; gap: 6px; padding-bottom: 14px; }
+  .tabwin .dot3 b { width: 10px; height: 10px; border-radius: 50%; background: #cfd4de; display: block; }
+  .tabwin .body { position: absolute; top: 46px; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: #fbfcfe; }
+  .tabwin .body img { width: 104px; height: 104px; object-fit: contain; }
+  .tabwin .lines { position: absolute; left: 24px; right: 24px; bottom: 22px; display: grid; gap: 8px; }
+  .tabwin .lines b { height: 9px; border-radius: 5px; background: #edf0f5; display: block; }
+  .icotile { position: absolute; width: 132px; height: 132px; border-radius: 34px; background: #fff;
+    box-shadow: 0 1px 2px rgba(20,24,40,.06), 0 14px 34px -10px rgba(20,24,40,.25); display: flex; align-items: center; justify-content: center; }
+  .icotile img { width: 76px; height: 76px; object-fit: contain; }
+
+  /* ── App window ────────────────────────────── */
+  #win { position: absolute; left: 160px; top: 250px; width: 1600px; height: 960px; border-radius: 18px;
+    background: var(--bg); overflow: hidden; transform-origin: 0 0;
+    box-shadow: 0 0 0 1px rgba(20,24,40,.08), 0 40px 120px -30px rgba(20,30,60,.45), 0 12px 30px -10px rgba(20,30,60,.18); }
+  #titlebar { position: absolute; left: 0; right: 0; top: 0; height: 46px; display: flex; align-items: center; padding: 0 18px; gap: 8px;
+    background: var(--sidebar); border-bottom: 1px solid var(--line); }
+  #titlebar b { width: 13px; height: 13px; border-radius: 50%; display: block; }
+  #titlebar .t { position: absolute; left: 0; right: 0; text-align: center; font-size: 14px; color: var(--muted); font-weight: 500; }
+  #sidebar { position: absolute; left: 0; top: 46px; bottom: 0; width: 264px; background: var(--sidebar); border-right: 1px solid var(--line); padding: 18px 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; font-weight: 650; font-size: 17px; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .nav { display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 10px; border-radius: 9px; font-size: 15px; color: #3a3d45; font-weight: 500; position: relative; }
+  .nav svg { width: 18px; height: 18px; stroke: #6b6f7a; fill: none; stroke-width: 1.7; }
+  .nav img { width: 18px; height: 18px; }
+  .nav.active { background: #e3eaff; color: var(--primary); }
+  .navlabel { font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: .02em; padding: 18px 10px 8px; }
+  #main { position: absolute; left: 264px; top: 46px; right: 0; bottom: 0; }
+  .view { position: absolute; inset: 0; }
+
+  /* chat home */
+  #home .hello { position: absolute; left: 0; right: 0; top: 300px; text-align: center; font-family: var(--head); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  .composer { position: absolute; left: 50%; width: 760px; margin-left: -380px; height: 64px; background: #fff; border-radius: 16px;
+    border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.04); display: flex; align-items: center; padding: 0 20px; font-size: 16px; color: var(--faint); }
+  .composer .send { margin-left: auto; width: 36px; height: 36px; border-radius: 10px; background: var(--primary); display: flex; align-items: center; justify-content: center; }
+  .composer .send svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2.2; }
+
+  /* overview */
+  #ov { padding: 34px 44px; }
+  .ovhead { display: flex; align-items: center; gap: 14px; }
+  .ovhead img { width: 34px; height: 34px; }
+  .ovhead .t { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; }
+  .ovhead .badge { margin-left: 6px; font-size: 13px; font-weight: 600; color: #1f8a65; background: #e3f4ec; padding: 5px 11px; border-radius: 99px; display: flex; gap: 7px; align-items: center; }
+  .ovhead .badge i { width: 7px; height: 7px; border-radius: 50%; background: #1f8a65; display: block; }
+  .ovsub { margin-top: 6px; font-size: 15px; color: var(--muted); }
+  .tabs { display: flex; gap: 4px; margin-top: 22px; border-bottom: 1px solid var(--line); }
+  .tabs div { padding: 10px 14px 12px; font-size: 14.5px; font-weight: 550; color: var(--muted); position: relative; }
+  .tabs div.on { color: var(--fg); }
+  .tabs div.on:after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--primary); border-radius: 2px; }
+  .search { position: relative; margin-top: 24px; height: 54px; background: #fff; border: 1px solid var(--line); border-radius: 13px;
+    display: flex; align-items: center; padding: 0 18px; gap: 12px; font-size: 16.5px; color: var(--faint); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .search svg { width: 20px; height: 20px; stroke: #8a909c; fill: none; stroke-width: 2; }
+  .search .typed { color: var(--fg); }
+  .caret { display: inline-block; width: 2px; height: 22px; background: var(--primary); vertical-align: -4px; margin-left: 1px; }
+  .kbd { margin-left: auto; font-size: 12.5px; color: var(--faint); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .stat { padding: 16px 18px; }
+  .stat .l { font-size: 12px; font-weight: 650; letter-spacing: .04em; color: var(--faint); text-transform: uppercase; display: flex; justify-content: space-between; }
+  .stat .v { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; margin-top: 8px; }
+  .stat .d { font-size: 13.5px; color: var(--faint); margin-top: 3px; }
+  .cols { display: grid; grid-template-columns: 1fr 1.25fr; gap: 22px; margin-top: 24px; }
+  .sh { font-size: 15px; font-weight: 650; margin-bottom: 10px; display: flex; gap: 10px; align-items: baseline; }
+  .sh span { font-size: 13px; font-weight: 500; color: var(--faint); }
+  .ev { display: flex; gap: 14px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f2f6; }
+  .ev:last-child { border-bottom: 0; }
+  .ev .tm { width: 52px; font-size: 14px; font-weight: 650; color: var(--fg); }
+  .ev .bar { width: 4px; height: 34px; border-radius: 2px; }
+  .ev .n { font-size: 14.5px; font-weight: 550; } .ev .s { font-size: 12.5px; color: var(--faint); margin-top: 2px; }
+  .wf { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wfc { padding: 14px 16px; }
+  .wfc .n { font-size: 14.5px; font-weight: 650; display: flex; gap: 9px; align-items: center; }
+  .wfc .n img { width: 18px; height: 18px; }
+  .wfc .d { font-size: 12.5px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+  .wfc .a { font-size: 12.5px; color: var(--primary); font-weight: 600; margin-top: 9px; }
+  .skel { position: absolute; background: linear-gradient(90deg,#eceff5,#f5f7fb,#eceff5); border-radius: 10px; }
+  #results { position: absolute; left: 44px; right: 44px; top: 218px; padding: 8px; z-index: 5;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 30px 60px -20px rgba(20,30,60,.30); }
+  .res { display: flex; align-items: center; gap: 14px; height: 66px; padding: 0 14px; border-radius: 10px; }
+  .res img { width: 26px; height: 26px; object-fit: contain; }
+  .res .n { font-size: 16px; font-weight: 600; } .res .s { font-size: 13px; color: var(--faint); margin-top: 2px; }
+  .chip { margin-left: auto; font-size: 12.5px; font-weight: 650; padding: 4px 10px; border-radius: 99px; }
+
+  /* chat */
+  #chatpanel { position: absolute; left: 850px; top: 64px; width: 700px; height: 700px; background: var(--bg); border-radius: 16px; overflow: hidden; transform-origin: 0 0;
+    box-shadow: 0 0 0 1px rgba(20,24,40,.08), 0 40px 120px -30px rgba(20,30,60,.45), 0 12px 30px -10px rgba(20,30,60,.18); }
+  #chatpanel .ptitle { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--sidebar); border-bottom: 1px solid var(--line); position: relative; }
+  #chatpanel .ptitle b { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  #chatpanel .ptitle .t { position: absolute; left: 0; right: 0; text-align: center; font-size: 13.5px; color: var(--muted); font-weight: 500; }
+  #chat { position: absolute; left: 0; right: 0; top: 44px; bottom: 0; }
+  #chat .col { position: absolute; left: 30px; right: 30px; top: 26px; }
+  .ubub { margin-left: auto; width: fit-content; max-width: 600px; background: #eaf0ff; color: var(--fg); padding: 16px 20px; border-radius: 18px 18px 6px 18px; font-size: 18px; line-height: 1.4; font-weight: 500; }
+  .who { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 650; margin: 26px 0 12px; }
+  .who img { width: 28px; height: 28px; border-radius: 8px; }
+  .tool { display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 16px; margin-bottom: 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; font-size: 14.5px; }
+  .tool .ic { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
+  .tool .ic svg { width: 14px; height: 14px; stroke: #fff; fill: none; stroke-width: 3; }
+  .tool .nm { font-family: var(--mono); font-weight: 500; font-size: 14px; color: var(--fg); }
+  .tool .ar { font-family: var(--mono); font-size: 13px; color: var(--faint); }
+  .tool .rs { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 550; }
+  .tool img { width: 18px; height: 18px; }
+  .spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid #d6dcea; border-top-color: var(--primary); }
+  #approve { position: absolute; left: 0; right: 0; background: #fff; border-radius: 16px; border: 1px solid #cfdbff;
+    box-shadow: 0 0 0 5px rgba(0,83,253,.07), 0 30px 70px -24px rgba(20,30,60,.40); padding: 22px 24px; transform-origin: 50% 0; }
+  #approve .h { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--primary); }
+  #approve .h svg { width: 20px; height: 20px; stroke: var(--primary); fill: none; stroke-width: 2; }
+  #approve .h .tg { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--muted); font-weight: 500; background: #f2f4f9; padding: 4px 9px; border-radius: 7px; }
+  #approve .m { font-size: 20px; font-weight: 600; margin-top: 14px; letter-spacing: -0.01em; line-height: 1.35; }
+  #approve .det { margin-top: 12px; font-family: var(--mono); font-size: 14px; background: #f6f8fc; border: 1px solid var(--line); border-radius: 9px; padding: 11px 14px; color: #3a3d45; }
+  #approve .btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .btn { height: 42px; padding: 0 20px; border-radius: 10px; font-size: 15px; font-weight: 650; display: flex; align-items: center; }
+  .btn.g { border: 1px solid var(--line); color: #3a3d45; background: #fff; }
+  .btn.p { background: var(--primary); color: #fff; box-shadow: 0 6px 16px -6px rgba(0,83,253,.6); }
+  #approved { position: absolute; left: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-radius: 12px; background: #e3f4ec; color: #1f8a65; font-weight: 650; font-size: 14.5px; }
+  #approved svg { width: 16px; height: 16px; stroke: #1f8a65; fill: none; stroke-width: 3; }
+  #reply { position: absolute; left: 0; font-size: 18px; line-height: 1.5; color: var(--fg); width: 760px; }
+  #reply b { color: var(--primary); font-weight: 650; }
+
+  /* doc */
+  #doc { position: absolute; left: 1010px; top: 110px; width: 820px; height: 1060px; background: #f9fbfd; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(20,24,40,.08), 0 50px 120px -30px rgba(20,30,60,.55); transform-origin: 50% 0; }
+  #doc .bar { height: 64px; background: #fff; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+  #doc .bar img { width: 26px; height: 34px; object-fit: contain; }
+  #doc .bar .t { font-size: 17px; font-weight: 500; color: #1f1f1f; }
+  #doc .bar .m { font-size: 13px; color: #5f6368; margin-top: 2px; }
+  #doc .bar .sh { margin-left: auto; background: #c2e7ff; color: #001d35; padding: 9px 18px; border-radius: 99px; font-size: 14px; font-weight: 600; margin-bottom: 0; }
+  #doc .page { position: absolute; left: 48px; right: 48px; top: 96px; bottom: -40px; background: #fff; box-shadow: 0 1px 3px rgba(60,64,67,.2); padding: 54px 60px; font-family: Arial, sans-serif; color: #1f1f1f; }
+  #doc .page .ln { will-change: transform, opacity; }
+  #doc h1 { font-size: 30px; font-weight: 400; margin-bottom: 14px; font-family: var(--head); letter-spacing: -0.01em; }
+  #doc h2 { font-size: 19px; font-weight: 700; margin: 20px 0 8px; }
+  #doc p, #doc li { font-size: 15px; line-height: 1.6; }
+  #doc ul, #doc ol { padding-left: 22px; }
+  #doc .foot { margin-top: 22px; padding-top: 12px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #5f6368; font-style: italic; }
+
+  /* cursor */
+  #cursor { position: absolute; left: 0; top: 0; width: 34px; height: 34px; z-index: 50; filter: drop-shadow(0 3px 5px rgba(0,0,0,.28)); }
+  #ripple { position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid var(--primary); z-index: 49; }
+
+  /* captions */
+  .cap { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--head); font-weight: 680; font-size: 64px; letter-spacing: -0.03em; color: var(--fg); white-space: nowrap; z-index: 20; }
+  .cap .hl { color: var(--primary); }
+  .side { position: absolute; left: 120px; width: 700px; font-family: var(--head); font-weight: 680; font-size: 86px; letter-spacing: -0.04em; line-height: 1.02; color: var(--fg); z-index: 20; }
+  .side .hl { color: var(--primary); }
+  .side .sm { display: block; margin-top: 26px; font-size: 26px; font-weight: 500; letter-spacing: -0.01em; color: var(--muted); line-height: 1.35; }
+
+  /* outro */
+  #outro { position: absolute; inset: 0; background: #0d0e12; z-index: 60; }
+  #outro .glow { position: absolute; left: 50%; top: 46%; width: 1400px; height: 700px; margin: -350px 0 0 -700px;
+    background: radial-gradient(ellipse at center, rgba(0,83,253,.22), rgba(0,83,253,0) 65%); }
+  #ologos { position: absolute; left: 0; right: 0; top: 250px; display: flex; justify-content: center; align-items: center; gap: 22px; }
+  .otile { width: 104px; height: 104px; border-radius: 28px; background: #fff; display: flex; align-items: center; justify-content: center; }
+  .otile img { width: 60px; height: 60px; object-fit: contain; }
+  .otile.h { width: 128px; height: 128px; border-radius: 32px; overflow: hidden; }
+  .otile.h img { width: 128px; height: 128px; }
+  .plus { color: #5b6170; font-family: var(--head); font-size: 64px; font-weight: 300; margin: 0 14px; }
+  #otitle { position: absolute; left: 0; right: 0; top: 452px; text-align: center; font-family: var(--head); font-size: 112px; font-weight: 700; letter-spacing: -0.045em; color: #fff; }
+  #osub { position: absolute; left: 0; right: 0; top: 606px; text-align: center; font-family: var(--head); font-size: 34px; font-weight: 450; color: #a3a8b5; letter-spacing: -0.01em; }
+  #ochip { position: absolute; left: 50%; top: 690px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; font-family: var(--mono); font-size: 24px; color: #e8eaf0;
+    padding: 16px 26px; border: 1px solid #2a2d36; border-radius: 14px; background: #15171d; white-space: nowrap; }
+  #ochip .gbar { width: 46px; height: 6px; }
+  #ofoot { position: absolute; left: 80px; right: 80px; bottom: 54px; display: flex; justify-content: space-between; align-items: center; font-size: 18px; color: #6b7080; font-family: var(--head); }
+  #ofoot img { height: 26px; vertical-align: middle; margin-right: 12px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="dots"></div>
+  <div id="vignette"></div>
+
+  <!-- Scene 1 -->
+  <div id="s1">
+    <div id="tabs"></div>
+    <div id="tiles"></div>
+    <div class="headline" id="h1" style="font-size:112px; left:0; right:0; text-align:center; top:300px;">
+      <div><span class="word">Your</span> <span class="word">Google</span> <span class="word">work,</span></div>
+      <div style="margin-top:8px"><span class="word">without</span> <span class="word">the</span> <span class="word" id="huntw" style="position:relative">tab hunt.<div class="gbar abs" id="huntbar" style="left:4px; right:24px; bottom:-14px; transform-origin:0 50%"><i></i><i></i><i></i><i></i></div></span></div>
+    </div>
+  </div>
+
+  <!-- Captions -->
+  <div class="cap" id="cap2" style="top:96px">Google Workspace, <span class="hl">inside Hermes.</span></div>
+  <div class="cap" id="cap3" style="top:96px">One search. <span class="hl">Mail, meetings and files.</span></div>
+  <div class="side" id="side4" style="top:330px"><span class="hl">38 tools.</span><br>One ask.<span class="sm">Hermes works across Gmail, Calendar, Drive, Docs, Sheets and Contacts.</span></div>
+  <div class="side" id="side5" style="top:300px">Reads are automatic.<br><span class="hl">Sends and shares wait for you.</span></div>
+
+  <!-- App window -->
+  <div id="win">
+    <div id="titlebar"><b style="background:#ff5f57"></b><b style="background:#febc2e"></b><b style="background:#28c840"></b><div class="t">Hermes</div></div>
+    <div id="sidebar">
+      <div class="brand"><img src="assets/favicon.svg">Hermes</div>
+      <div class="nav" id="nav-chat"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>New chat</div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Sessions</div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/></svg>Skills</div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Capabilities</div>
+      <div class="navlabel">Plugins</div>
+      <div class="nav" id="nav-gw"><img src="assets/g.svg">Google Workspace</div>
+    </div>
+    <div id="main">
+      <div class="view" id="home">
+        <div class="hello">What should we work on?</div>
+        <div class="composer" style="top:380px">Ask Hermes anything…<div class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div></div>
+      </div>
+      <div class="view" id="ovskel">
+        <div class="skel" style="left:44px; top:34px; width:420px; height:34px"></div>
+        <div class="skel" style="left:44px; top:84px; width:300px; height:18px"></div>
+        <div class="skel" style="left:44px; top:218px; right:44px; height:54px"></div>
+        <div class="skel" style="left:44px; top:290px; width:400px; height:108px"></div>
+        <div class="skel" style="left:468px; top:290px; width:400px; height:108px"></div>
+        <div class="skel" style="left:892px; top:290px; width:400px; height:108px"></div>
+        <div class="skel" style="left:44px; top:430px; width:540px; height:300px"></div>
+        <div class="skel" style="left:610px; top:430px; width:680px; height:300px"></div>
+      </div>
+      <div class="view" id="ov">
+        <div class="ovhead ln"><img src="assets/g.svg"><div class="t">Google Workspace</div><div class="badge"><i></i>Connected · 6 services ready</div></div>
+        <div class="ovsub ln">Your Google work, without the tab hunt</div>
+        <div class="tabs ln"><div class="on">Overview</div><div>Gmail</div><div>Calendar</div><div>Drive</div><div>Docs</div><div>Sheets</div><div>Contacts</div><div>Settings</div></div>
+        <div class="search ln" id="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span id="sph">Search Gmail, Calendar and Drive at once</span><span class="typed" id="stxt"></span><span class="caret" id="caret"></span><span class="kbd">Enter</span></div>
+        <div class="stats">
+          <div class="card stat ln"><div class="l">Unread <span>✉</span></div><div class="v">12</div><div class="d">Waiting in your inbox</div></div>
+          <div class="card stat ln"><div class="l">Next up</div><div class="v">11:00</div><div class="d">Acme launch sync</div></div>
+          <div class="card stat ln"><div class="l">Recent files</div><div class="v">8</div><div class="d">Changed in Drive</div></div>
+        </div>
+        <div class="cols">
+          <div class="ln">
+            <div class="sh">Today and tomorrow</div>
+            <div class="card">
+              <div class="ev"><div class="tm">09:30</div><div class="bar" style="background:#4285f4"></div><div><div class="n">Design review</div><div class="s">Studio · 45 min</div></div></div>
+              <div class="ev"><div class="tm">11:00</div><div class="bar" style="background:#34a853"></div><div><div class="n">Acme launch sync</div><div class="s">Google Meet · James Park +2</div></div></div>
+              <div class="ev"><div class="tm">15:00</div><div class="bar" style="background:#fbbc04"></div><div><div class="n">Hiring loop</div><div class="s">Room 4 · 1 h</div></div></div>
+              <div class="ev"><div class="tm">Tue</div><div class="bar" style="background:#ea4335"></div><div><div class="n">Quarterly planning</div><div class="s">All day</div></div></div>
+            </div>
+          </div>
+          <div class="ln">
+            <div class="sh">Workflows <span>The cross-app part</span></div>
+            <div class="wf">
+              <div class="card wfc"><div class="n"><img src="assets/calendar.svg">Meeting brief</div><div class="d">Attendees, recent threads, related files, and an agenda in one page.</div><div class="a">Pick a meeting →</div></div>
+              <div class="card wfc"><div class="n"><img src="assets/gmail.svg">Email → event</div><div class="d">Read a date from a message and create the invitation.</div><div class="a">Start from Gmail →</div></div>
+              <div class="card wfc"><div class="n"><img src="assets/sheets.svg">Invoices → Sheet</div><div class="d">Find invoice attachments and append a reviewable row per file.</div><div class="a">Scan inbox →</div></div>
+              <div class="card wfc"><div class="n"><img src="assets/drive.svg">Organize Drive</div><div class="d">Preview matching files, then move them into one folder.</div><div class="a">Build a move plan →</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="results">
+          <div class="res" style="background:#f4f7ff"><img src="assets/gmail.svg"><div><div class="n">Re: Acme launch — final assets</div><div class="s">James Park · 6 Nov</div></div><div class="chip" style="background:#fde8e6;color:#c5221f">Gmail</div></div>
+          <div class="res"><img src="assets/calendar.svg"><div><div class="n">Acme launch sync</div><div class="s">Tomorrow · 11:00 – 11:45</div></div><div class="chip" style="background:#e3edff;color:#1a56d6">Calendar</div></div>
+          <div class="res"><img src="assets/docs.svg"><div><div class="n">Acme launch plan</div><div class="s">Google Docs · edited yesterday</div></div><div class="chip" style="background:#e4f4e8;color:#188038">Drive</div></div>
+          <div class="res"><img src="assets/sheets.svg"><div><div class="n">Acme launch budget</div><div class="s">Google Sheets · edited 3 days ago</div></div><div class="chip" style="background:#e4f4e8;color:#188038">Drive</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+      <div id="chatpanel"><div class="ptitle"><b style="background:#ff5f57"></b><b style="background:#febc2e"></b><b style="background:#28c840"></b><div class="t">Hermes · New chat</div></div><div id="chat">
+        <div class="col">
+          <div class="ubub" id="ubub">Prepare me for my meeting with James tomorrow.</div>
+          <div class="who" id="who"><img src="assets/favicon.svg">Hermes</div>
+          <div id="toolrows">
+            <div class="tool"><img src="assets/calendar.svg"><span class="nm">google_calendar_search</span><span class="ar">"James"</span><span class="rs">1 event</span><div class="st"></div></div>
+            <div class="tool"><img src="assets/gmail.svg"><span class="nm">google_gmail_search</span><span class="ar">from:james newer_than:180d</span><span class="rs">3 threads</span><div class="st"></div></div>
+            <div class="tool"><img src="assets/drive.svg"><span class="nm">google_drive_search</span><span class="ar">"Acme launch"</span><span class="rs">2 files</span><div class="st"></div></div>
+            <div class="tool"><img src="assets/docs.svg"><span class="nm">google_meeting_brief</span><span class="ar">save_to_docs: true</span><span class="rs" id="mbrs">Needs your approval</span><div class="st"></div></div>
+          </div>
+          <div style="position:relative">
+            <div id="approve">
+              <div class="h"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Approval needed<span class="tg">pre_tool_call</span></div>
+              <div class="m">Google Workspace wants to create a briefing document in your Drive.</div>
+              <div class="det">Meeting: Acme launch sync</div>
+              <div class="btns"><div class="btn g">Deny</div><div class="btn p" id="btnok">Approve</div></div>
+            </div>
+            <div id="approved"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approved · briefing created</div>
+            <div id="reply">Your brief for <b>Acme launch sync</b> is ready in Google Docs: attendees, recent threads, related files and a suggested agenda.</div>
+          </div>
+        </div>
+        
+      </div>
+      </div>
+
+  <!-- Google Doc -->
+  <div id="doc">
+    <div class="bar"><img src="assets/docs.svg"><div><div class="t">Brief: Acme launch sync</div><div class="m">File&nbsp;&nbsp; Edit&nbsp;&nbsp; View&nbsp;&nbsp; Insert&nbsp;&nbsp; Format&nbsp;&nbsp; Tools</div></div><div class="sh">Share</div></div>
+    <div class="page">
+      <h1 class="ln">Brief: Acme launch sync</h1>
+      <p class="ln"><b>When:</b> Tue 10 Nov, 11:00 → 11:45 · Google Meet</p>
+      <h2 class="ln">Attendees (3)</h2>
+      <ul class="ln"><li>James Park — accepted</li><li>Lena Ortiz — accepted</li><li>Sam Reyes — no response</li></ul>
+      <h2 class="ln">Suggested agenda</h2>
+      <ol class="ln"><li>Confirm launch date and owners</li><li>Review the final assets James sent</li><li>Budget: open line items</li></ol>
+      <h2 class="ln">Recent threads</h2>
+      <ul class="ln"><li>6 Nov — Re: Acme launch — final assets (James Park)</li><li>2 Nov — Launch checklist v2 (Lena Ortiz)</li></ul>
+      <h2 class="ln">Related files</h2>
+      <ul class="ln"><li>Acme launch plan · Acme launch budget</li></ul>
+      <div class="foot ln">Prepared by Hermes from your own Gmail and Drive. Verify anything that drives a decision.</div>
+    </div>
+  </div>
+
+  <div id="ripple"></div>
+  <svg id="cursor" viewBox="0 0 32 32"><path d="M6 3l0 22 6-6 4.2 9.2 3.8-1.8-4.1-9L24 17z" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+
+  <!-- Outro -->
+  <div id="outro">
+    <div class="glow"></div>
+    <div id="ologos">
+      <div class="otile h"><img src="assets/favicon.svg"></div>
+      <div class="plus">+</div>
+      <div class="otile"><img src="assets/gmail.svg"></div>
+      <div class="otile"><img src="assets/calendar.svg"></div>
+      <div class="otile"><img src="assets/drive.svg"></div>
+      <div class="otile"><img src="assets/docs.svg"></div>
+      <div class="otile"><img src="assets/sheets.svg"></div>
+      <div class="otile"><img src="assets/contacts.svg"></div>
+    </div>
+    <div id="otitle">Google Workspace for Hermes</div>
+    <div id="osub">Gmail · Calendar · Drive · Docs · Sheets · Contacts</div>
+    <div id="ochip"><div class="gbar"><i></i><i></i><i></i><i></i></div>38 tools · every write approved by you</div>
+    <div id="ofoot"><div><img src="assets/hermes-agent-banner.png">Hermes Plugin Hackathon</div><div>Music: Sascha Ende, ende.app (CC BY 4.0)</div></div>
+  </div>
+</div>
+
+<script>
+// ── Timing grid (114.84 BPM; downbeats from the bundled cue preset) ──
+const BEAT = 60 / 114.84;
+const DB = [0, 1.602, 3.704, 5.80, 7.91, 10.01, 12.12, 14.22, 16.34, 18.44, 20.54, 22.65, 24.75];
+const DURATION = 24.75;
+
+// ── Math helpers ──
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const eOutExpo = x => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+const eOutCubic = x => 1 - Math.pow(1 - x, 3);
+const eInCubic = x => x * x * x;
+const eInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eOutBack = (x, s = 1.6) => 1 + (s + 1) * Math.pow(x - 1, 3) + s * Math.pow(x - 1, 2);
+const spring = (x, k = 7, z = 0.42) => x <= 0 ? 0 : 1 - Math.exp(-z * k * x * 1.6) * Math.cos(k * x * 1.6 * Math.sqrt(1 - z * z));
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+function st(el, o, tr, extra) {
+  el.style.opacity = o;
+  el.style.visibility = o <= 0.001 ? 'hidden' : 'visible';
+  if (tr !== undefined) el.style.transform = tr;
+  if (extra) Object.assign(el.style, extra);
+}
+// in/out envelope: fade+rise in over [a, a+d], out over [b, b+d2]
+function inOut(t, a, b, d = 0.45, d2 = 0.3) {
+  const i = eOutExpo(prog(t, a, a + d));
+  const o = eInCubic(prog(t, b, b + d2));
+  return { i, o, v: i * (1 - o) };
+}
+
+// ── Scene 1 setup: six browser "tabs" ──
+const APPS = [
+  ['gmail', 'Inbox (12) – Gmail'], ['calendar', 'Google Calendar – Week of 9 Nov'], ['drive', 'My Drive – Google Drive'],
+  ['docs', 'Acme launch plan – Google Docs'], ['sheets', 'Acme launch budget – Google Sheets'], ['contacts', 'Google Contacts'],
+];
+const PILE = [ // final pile pose: x, y (centre), rotation
+  [470, 290, -7], [1450, 270, 6], [820, 600, 4], [1160, 380, -4], [430, 790, 8], [1500, 770, -3],
+];
+const tabsEl = $('#tabs'), tilesEl = $('#tiles');
+APPS.forEach(([k, title]) => {
+  const w = document.createElement('div'); w.className = 'tabwin';
+  w.innerHTML = `<div class="strip"><div class="tab"><img src="assets/${k}.svg"><span>${title}</span></div><div class="dot3"><b></b><b></b><b></b></div></div>
+    <div class="body"><img src="assets/${k}.svg"><div class="lines"><b style="width:70%"></b><b style="width:45%"></b></div></div>`;
+  tabsEl.appendChild(w);
+  const tl = document.createElement('div'); tl.className = 'icotile'; tl.innerHTML = `<img src="assets/${k}.svg">`;
+  tilesEl.appendChild(tl);
+});
+const tabWins = $$('.tabwin'), tiles = $$('.icotile');
+
+function scene1(t) {
+  const on = t < DB[2] + 1.0;
+  $('#s1').style.display = on ? 'block' : 'none';
+  if (!on) return;
+  const drop = DB[1];
+  // tabs pop in on 8th notes, then get swept away on the drop
+  tabWins.forEach((w, i) => {
+    const t0 = 0.04 + i * BEAT / 2;
+    const p = prog(t, t0, t0 + 0.55);
+    const s = lerp(0.65, 1.22, eOutBack(p, 1.8));
+    const [x, y, r] = PILE[i];
+    const yIn = lerp(y + 140, y, eOutExpo(p));
+    const out = eInCubic(prog(t, drop - 0.06, drop + 0.2));
+    const sx = lerp(x, 960, out), sy = lerp(yIn, 540, out);
+    const drift = Math.sin(t * 1.3 + i) * 4;
+    st(w, prog(t, t0, t0 + 0.12) * (1 - out),
+      `translate(${sx - 220}px, ${sy - 143 + drift}px) rotate(${lerp(r * 1.8, r, eOutExpo(p)) * (1 - out)}deg) scale(${s * (1 - out * 0.6)})`);
+    w.style.zIndex = 10 + i;
+  });
+  // icon tiles burst from centre into a row
+  tiles.forEach((tl, i) => {
+    const t0 = drop + 0.02 + i * 0.045;
+    const p = spring(prog(t, t0, t0 + 1.1), 7, 0.5);
+    const rx = 960 + (i - 2.5) * 172, ry = 760;
+    const x = lerp(960, rx, p), y = lerp(540, ry, p);
+    const out = eInCubic(prog(t, DB[2] - 0.32, DB[2] + 0.05));
+    const ox = lerp(x, 960, out), oy = lerp(y, 1180, out);
+    st(tl, clamp(prog(t, t0, t0 + 0.1)) * (1 - prog(t, DB[2] - 0.05, DB[2] + 0.12)),
+      `translate(${ox - 66}px, ${oy - 66}px) scale(${lerp(0.3, 1, clamp(p, 0, 1.2))})`);
+  });
+  // headline: words rise in on 16ths starting at the drop
+  const words = $$('#h1 .word');
+  words.forEach((w, i) => {
+    const t0 = drop + 0.04 + i * BEAT / 8;
+    const p = eOutExpo(prog(t, t0, t0 + 0.45));
+    st(w, p, `translateY(${lerp(60, 0, p)}px)`, { filter: `blur(${(1 - p) * 8}px)` });
+  });
+  const up = eInOut(prog(t, DB[2] - 0.15, DB[2] + 0.6));
+  const fade = prog(t, DB[2] + 0.75, DB[2] + 0.95);
+  const h1 = $('#h1');
+  h1.style.top = '250px';
+  h1.style.transformOrigin = '50% 0';
+  h1.style.transform = `translateY(${lerp(0, -196, up)}px) scale(${lerp(1, 0.52, up)})`;
+  h1.style.opacity = 1 - fade;
+  h1.style.filter = `blur(${fade * 8}px)`;
+  const hb = eOutExpo(prog(t, drop + 0.75, drop + 1.25));
+  $('#huntbar').style.transform = `scaleX(${hb})`;
+}
+
+// ── App window camera ──
+function camera(t) {
+  // keyframes: [time, tx, ty, scale, rotX]
+  const K = [
+    [DB[2], 0, 780, 0.9, 28],
+    [DB[2] + 0.75, 0, 0, 1, 0],
+    [DB[4], 0, 0, 1, 0],
+    [DB[4] + 0.7, -410, -30, 1.3, 0],   // push into search
+    [DB[6], -410, -30, 1.3, 0],
+    [DB[6] + 0.55, -700, 300, 1.1, 0],  // fall away for chat panel
+  ];
+  let k = K[0];
+  if (t <= K[0][0]) return { tx: K[0][1], ty: K[0][2], s: K[0][3], rx: K[0][4] };
+  for (let i = 0; i < K.length - 1; i++) {
+    const a = K[i], b = K[i + 1];
+    if (t >= a[0] && t <= b[0]) {
+      const ease = (i === 0) ? eOutExpo : eInOut;
+      const p = ease(prog(t, a[0], b[0]));
+      return { tx: lerp(a[1], b[1], p), ty: lerp(a[2], b[2], p), s: lerp(a[3], b[3], p), rx: lerp(a[4], b[4], p) };
+    }
+  }
+  const z = K[K.length - 1];
+  return { tx: z[1], ty: z[2], s: z[3], rx: z[4] };
+}
+
+function windowScenes(t) {
+  const win = $('#win');
+  const visible = t >= DB[2] - 0.02 && t < DB[6] + 0.6;
+  win.style.display = visible ? 'block' : 'none';
+  const c = camera(t);
+  win.style.transform = `perspective(2400px) translate(${c.tx}px, ${c.ty}px) rotateX(${c.rx}deg) scale(${c.s})`;
+  win.style.opacity = clamp(prog(t, DB[2] - 0.02, DB[2] + 0.2)) * (1 - prog(t, DB[6], DB[6] + 0.22));
+
+  // views
+  const click1 = DB[2] + 3 * BEAT;          // sidebar click (≈5.27)
+  const chatCut = DB[6];
+  const homeV = t < click1 + 0.08 ? 1 : 0;
+  st($('#home'), homeV);
+  const skel = t >= click1 + 0.08 && t < click1 + 0.45 ? 1 : (t >= click1 + 0.45 ? 1 - prog(t, click1 + 0.45, click1 + 0.6) : 0);
+  st($('#ovskel'), t < chatCut ? skel : 0);
+  const ovIn = t >= click1 + 0.45 && t < chatCut + 0.2;
+  st($('#ov'), ovIn ? 1 - prog(t, chatCut, chatCut + 0.18) : 0);
+  $$('#ov .ln').forEach((el, i) => {
+    const t0 = click1 + 0.45 + i * 0.05;
+    const p = eOutExpo(prog(t, t0, t0 + 0.5));
+    st(el, p, `translateY(${(1 - p) * 24}px)`);
+  });
+  $('#nav-gw').classList.toggle('active', t >= click1 && t < chatCut);
+  $('#nav-chat').classList.toggle('active', t < click1 || t >= chatCut);
+
+  // search typing
+  const q = 'Acme launch';
+  const tType = DB[4] + 0.42;
+  const n = clamp(Math.floor((t - tType) / (BEAT / 4)) + 1, 0, q.length);
+  $('#stxt').textContent = t >= tType ? q.slice(0, n) : '';
+  $('#sph').style.display = t >= tType ? 'none' : 'inline';
+  const focused = t >= DB[4] + 0.2 && t < chatCut;
+  $('#caret').style.opacity = focused ? ((Math.floor(t / 0.35) % 2 === 0 || (t - tType) < q.length * BEAT / 4 + 0.2) ? 1 : 0) : 0;
+  $('#search').style.borderColor = focused ? '#9bb8ff' : '';
+  $('#search').style.boxShadow = focused ? '0 0 0 4px rgba(0,83,253,.10)' : '';
+  // results drop on the downbeat
+  const res = $('#results');
+  const rOn = t >= DB[5] && t < chatCut;
+  st(res, rOn ? eOutExpo(prog(t, DB[5], DB[5] + 0.12)) : 0, `translateY(${(1 - eOutExpo(prog(t, DB[5], DB[5] + 0.4))) * -14}px)`);
+  // grow the card with its rows so it never shows empty space
+  let rows = 0;
+  for (let i = 0; i < 4; i++) rows += eOutExpo(prog(t, DB[5] + 0.05 + i * BEAT / 2, DB[5] + 0.05 + i * BEAT / 2 + 0.3));
+  const fullH = 16 + 66 * 4, h = 16 + 66 * rows;
+  res.style.clipPath = `inset(0 -60px ${fullH - h}px -60px round 14px)`;
+  $$('#results .res').forEach((el, i) => {
+    const t0 = DB[5] + 0.05 + i * BEAT / 2;
+    const p = eOutExpo(prog(t, t0, t0 + 0.45));
+    st(el, p, `translateX(${(1 - p) * -30}px)`);
+  });
+
+  // chat
+  const cp = $('#chatpanel');
+  const cpIn = eOutExpo(prog(t, chatCut + 0.05, chatCut + 0.8));
+  const cpOn = t >= chatCut && t < DB[10] + 0.6;
+  const back = eInOut(prog(t, DB[9], DB[9] + 0.7));
+  st(cp, cpOn ? clamp(prog(t, chatCut + 0.05, chatCut + 0.25)) : 0, `translate(${(1 - cpIn) * 420}px, ${(1 - cpIn) * 40}px) scale(${1.35 * (1 - 0.06 * back)})`, { filter: `blur(${back * 2.5}px)` });
+  const ub = eOutBack(prog(t, chatCut + 0.4, chatCut + 0.85), 1.4);
+  st($('#ubub'), clamp(prog(t, chatCut + 0.4, chatCut + 0.55)), `translateY(${(1 - ub) * 30}px) scale(${lerp(0.9, 1, ub)})`, { transformOrigin: '100% 100%' });
+  st($('#who'), eOutExpo(prog(t, DB[6] + 2 * BEAT, DB[6] + 2 * BEAT + 0.4)));
+  const toolT = [DB[6] + 2 * BEAT, DB[6] + 3 * BEAT, DB[7], DB[7] + BEAT];
+  $$('#toolrows .tool').forEach((el, i) => {
+    const t0 = toolT[i];
+    const p = eOutExpo(prog(t, t0, t0 + 0.45));
+    st(el, p, `translateY(${(1 - p) * 20}px)`);
+    const stEl = el.querySelector('.st');
+    const done = i < 3 ? t > t0 + 0.42 : t > DB[8] + 2 * BEAT + 0.05;
+    const rs = el.querySelector('.rs');
+    if (done) {
+      stEl.className = 'st ic'; stEl.style.background = '#1f8a65'; stEl.style.transform = '';
+      stEl.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+      rs.style.opacity = 1;
+      if (i === 3) { rs.textContent = 'Doc created'; rs.style.color = '#1f8a65'; }
+    } else {
+      stEl.className = 'st spin'; stEl.style.background = ''; stEl.innerHTML = '';
+      stEl.style.transform = `rotate(${t * 720}deg)`;
+      rs.style.opacity = i === 3 ? (t > DB[8] ? 1 : 0) : 0;
+      if (i === 3) { rs.textContent = 'Needs your approval'; rs.style.color = '#c08532'; }
+    }
+  });
+  // approval card
+  const ap = $('#approve');
+  const apIn = spring(prog(t, DB[8], DB[8] + 1.0), 8, 0.55);
+  const clickA = DB[8] + 2 * BEAT;            // ≈17.39 strong beat
+  const apOut = eInCubic(prog(t, clickA + 0.12, clickA + 0.38));
+  st(ap, clamp(prog(t, DB[8], DB[8] + 0.12)) * (1 - apOut), `translateY(${(1 - Math.min(apIn, 1)) * 40}px) scale(${lerp(0.92, 1, Math.min(apIn, 1.05)) * (1 - apOut * 0.08)})`);
+  const pressed = t >= clickA - 0.02 && t < clickA + 0.14;
+  $('#btnok').style.transform = pressed ? 'scale(0.94)' : 'scale(1)';
+  $('#btnok').style.filter = pressed ? 'brightness(.88)' : '';
+  const ad = eOutBack(prog(t, clickA + 0.3, clickA + 0.7), 1.5);
+  st($('#approved'), clamp(prog(t, clickA + 0.3, clickA + 0.4)), `scale(${lerp(0.85, 1, ad)})`, { top: '0px', transformOrigin: '0 50%' });
+  const rp = eOutExpo(prog(t, clickA + 2 * BEAT, clickA + 2 * BEAT + 0.6));
+  st($('#reply'), rp, `translateY(${(1 - rp) * 16}px)`, { top: '62px' });
+}
+
+function captions(t) {
+  const c2 = inOut(t, DB[2] + 0.8, DB[4] - 0.28, 0.5, 0.26);
+  st($('#cap2'), c2.v, `translateY(${(1 - c2.i) * 40 - c2.o * 30}px)`, { filter: `blur(${(1 - c2.i) * 6}px)` });
+  const c3 = inOut(t, DB[4] + 0.05, DB[6] - 0.25, 0.55, 0.22);
+  st($('#cap3'), c3.v, `translateY(${(1 - c3.i) * 40 - c3.o * 30}px)`, { filter: `blur(${(1 - c3.i) * 6}px)` });
+  const c4 = inOut(t, DB[6] + 0.26, DB[8] - 0.28, 0.6, 0.26);
+  st($('#side4'), c4.v, `translateX(${(1 - c4.i) * -60}px)`, { filter: `blur(${(1 - c4.i) * 6}px)` });
+  const c5 = inOut(t, DB[8] + 0.05, DB[10] - 0.1, 0.6, 0.2);
+  st($('#side5'), c5.v, `translateX(${(1 - c5.i) * -60}px)`, { filter: `blur(${(1 - c5.i) * 6}px)` });
+}
+
+function docScene(t) {
+  const d = $('#doc');
+  const t0 = DB[9];
+  const p = eOutExpo(prog(t, t0, t0 + 0.9));
+  st(d, (t >= t0 && t < DB[10] + 0.6) ? 1 : 0,
+    `translate(${(1 - p) * 1050}px, ${(1 - p) * 180 + Math.sin(t * 0.9) * 3}px) rotate(${lerp(9, -1.5, p)}deg)`);
+  $$('#doc .ln').forEach((el, i) => {
+    const a = t0 + 0.25 + i * 0.075;
+    const q = eOutExpo(prog(t, a, a + 0.45));
+    st(el, q, `translateY(${(1 - q) * 14}px)`);
+  });
+}
+
+// cursor path: list of [time, target-selector | [x,y], click?]
+function elCenter(sel, dx = 0, dy = 0) {
+  const r = $(sel).getBoundingClientRect();
+  return [r.left + r.width / 2 + dx, r.top + r.height / 2 + dy];
+}
+function cursorScene(t) {
+  const cur = $('#cursor'), rip = $('#ripple');
+  const click1 = DB[2] + 3 * BEAT;
+  const clickS = DB[4] + 0.2;
+  const clickA = DB[8] + 2 * BEAT;
+  const path = [
+    [DB[2] + 0.6, [1500, 1150]],
+    [click1, () => elCenter('#nav-gw', -30, 4)],
+    [click1 + 0.5, () => elCenter('#nav-gw', -10, 40)],
+    [DB[4] - 0.05, () => elCenter('#search', 60, 26)],
+    [clickS, () => elCenter('#search', -260, 6)],
+    [DB[5] - 0.1, () => elCenter('#search', -200, 40)],
+    [DB[5] + 1.0, () => elCenter('#search', -120, 230)],
+    [DB[6], [2100, 900]],
+    [DB[8] + 0.1, [2050, 1000]],
+    [clickA, () => elCenter('#btnok', -4, 2)],
+    [clickA + 0.6, () => elCenter('#btnok', 30, 70)],
+    [DB[9], [2100, 1100]],
+  ];
+  const vis = (t > DB[2] + 0.6 && t < DB[6] + 0.05) || (t > DB[8] + 0.1 && t < DB[9]);
+  st(cur, vis ? 1 : 0);
+  st(rip, 0);
+  if (!vis) return;
+  let pos = null;
+  for (let i = 0; i < path.length - 1; i++) {
+    const [ta, A] = path[i], [tb, B] = path[i + 1];
+    if (t >= ta && t <= tb) {
+      const a = typeof A === 'function' ? A() : A, b = typeof B === 'function' ? B() : B;
+      const p = eInOut(prog(t, ta, tb));
+      // slight arc
+      const arc = Math.sin(p * Math.PI) * 40;
+      pos = [lerp(a[0], b[0], p), lerp(a[1], b[1], p) - arc];
+      break;
+    }
+  }
+  if (!pos) { const last = path[path.length - 1][1]; pos = typeof last === 'function' ? last() : last; }
+  let sc = 1;
+  for (const c of [click1, clickS, clickA]) {
+    const d = t - c;
+    if (d > -0.06 && d < 0.14) sc = 0.82;
+    if (d >= 0 && d < 0.45) {
+      const q = eOutCubic(d / 0.45);
+      st(rip, 1 - q, `translate(${pos[0]}px, ${pos[1]}px) scale(${lerp(0.2, 1.4, q)})`);
+    }
+  }
+  cur.style.transform = `translate(${pos[0] - 7}px, ${pos[1] - 4}px) scale(${sc})`;
+  cur.style.transformOrigin = '7px 4px';
+}
+
+function outro(t) {
+  const o = $('#outro');
+  const t0 = DB[10];
+  if (t < t0 - 0.12) { o.style.display = 'none'; return; }
+  o.style.display = 'block';
+  const w = eOutExpo(prog(t, t0 - 0.12, t0 + 0.5));
+  o.style.transform = `translateY(${(1 - w) * 1100}px)`;
+  o.style.borderRadius = `${(1 - w) * 80}px ${(1 - w) * 80}px 0 0`;
+  const tilesO = $$('#ologos > *');
+  tilesO.forEach((el, i) => {
+    const a = t0 + 0.15 + i * 0.06;
+    const p = spring(prog(t, a, a + 1.0), 8, 0.5);
+    st(el, clamp(prog(t, a, a + 0.12)), `translateY(${(1 - Math.min(p, 1.1)) * 60}px) scale(${lerp(0.6, 1, Math.min(p, 1.08))})`);
+  });
+  const ti = eOutExpo(prog(t, t0 + 2 * BEAT, t0 + 2 * BEAT + 0.6));
+  st($('#otitle'), ti, `translateY(${(1 - ti) * 40}px)`, { filter: `blur(${(1 - ti) * 8}px)` });
+  const su = eOutExpo(prog(t, t0 + 3 * BEAT, t0 + 3 * BEAT + 0.6));
+  st($('#osub'), su, `translateY(${(1 - su) * 24}px)`);
+  const ch = eOutExpo(prog(t, DB[11], DB[11] + 0.6));
+  st($('#ochip'), ch, `translateX(-50%) translateY(${(1 - ch) * 24}px)`);
+  const fo = eOutExpo(prog(t, DB[11] + BEAT, DB[11] + BEAT + 0.6));
+  st($('#ofoot'), fo);
+  $('#outro .glow').style.transform = `scale(${1 + 0.04 * Math.sin(t * 1.4)})`;
+}
+
+function background(t) {
+  $('#dots').style.transform = `translate(${(t * 6) % 32}px, ${(t * 4) % 32}px)`;
+}
+
+window.render = function (t) {
+  background(t);
+  scene1(t);
+  windowScenes(t);
+  captions(t);
+  docScene(t);
+  cursorScene(t);
+  outro(t);
+};
+window.DURATION = DURATION;
+window.ready = Promise.all([
+  document.fonts.ready,
+  ...Array.from(document.images).map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = img.onerror = r; })),
+]).then(() => true);
+const qs = new URLSearchParams(location.search);
+if (qs.has('t')) window.render(parseFloat(qs.get('t')));
+else if (qs.has('play')) { const s = performance.now(); (function loop() { window.render(((performance.now() - s) / 1000) % DURATION); requestAnimationFrame(loop); })(); }
+else window.render(0);
+</script>
+</body>
+</html>
