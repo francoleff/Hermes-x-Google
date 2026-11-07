@@ -2,18 +2,20 @@
 
 One place for your Google work inside Hermes Desktop, and an agent that can work across it.
 
-- **For you:** a sidebar page with Gmail, Calendar, Drive, Docs, Sheets and Contacts, plus a search that covers Gmail, Calendar and Drive at once.
+- **For you:** a sidebar page with Gmail, Calendar, Drive, Docs, Sheets and Contacts, a search that covers Gmail, Calendar and Drive at once, and a home tab whose widgets you can reorder, hide and bring back.
 - **For Hermes:** 38 tools that read and write those services. Hermes can combine them in one task, for example "prepare me for my meeting with James tomorrow".
+
+The page header, the setup screen and the sidebar row carry the Google "G" mark. The sidebar mark needs a Hermes build that supports a custom nav icon; older builds fall back to a codicon and everything else works unchanged.
 
 Nothing is sent, shared, created, moved, changed or cancelled until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
 
-> **Status: partly proven against a live Google account.** The automated tests (212 Python, 26 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
+> **Status: partly proven against a live Google account.** The automated tests (212 Python, 29 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
 
 ## What you can do
 
 | Area | In the sidebar page | Hermes tools |
 |---|---|---|
-| **Overview** | Unread count, today's agenda, recent files, workflow cards (meeting brief, invoices to Sheet, organise Drive), and a search across Gmail, Calendar and Drive | `google_search` |
+| **Overview** | Unread count, today's agenda, recent files, workflow cards (meeting brief, invoices to Sheet, organise Drive), and a search across Gmail, Calendar and Drive. **Customize** reorders and hides the widgets; the arrangement is saved per profile | `google_search` |
 | **Gmail** | Inbox and search, read a message, mark read or unread, star, archive, compose, reply, forward, create an event from a message | `google_gmail_search`, `google_gmail_read`, `google_gmail_send`, `google_gmail_draft`, `google_gmail_modify` |
 | **Calendar** | Agenda, event details, new event with a live clash warning, meeting brief; edit an event, cancel an event you organise, reply Going, Maybe or Decline to an invitation | `google_calendar_agenda`, `google_calendar_check_availability`, `google_calendar_create_event`, `google_calendar_update_event`, `google_calendar_cancel_event`, `google_calendar_rsvp` |
 | **Drive** | Recent files, search with Docs, Sheets and Folders filters, file details, rename, share with one person, Organise Drive (preview, then move files into one folder) | `google_drive_search`, `google_drive_create_folder`, `google_drive_move`, `google_drive_rename`, `google_drive_share` |
@@ -211,7 +213,7 @@ Workflows call the services module and never call Google directly. Each service 
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/python
 
-# Desktop UI: 26 tests under jsdom, against an SDK stand-in.
+# Desktop UI: 29 tests under jsdom, against an SDK stand-in.
 cd tests/js && npm install && npm test
 
 # Lint the desktop file for unresolved names and dead code.
