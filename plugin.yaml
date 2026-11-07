@@ -52,8 +52,10 @@ provides_tools:
   - google_sheets_update_range
   - google_sheets_create_tab
   - google_contacts_update
+  - google_contacts_delete
   - google_drive_get
   - google_drive_rename
+  - google_drive_trash
   - google_drive_share
 provides_hooks:
   - pre_tool_call

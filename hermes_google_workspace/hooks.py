@@ -38,7 +38,9 @@ _ALWAYS_APPROVE: dict[str, str] = {
     "google_sheets_update_range": "change cells in a Google Sheet",
     "google_sheets_create_tab": "add a tab to a Google Sheet",
     "google_contacts_update": "change a Google contact",
+    "google_contacts_delete": "delete a Google contact",
     "google_drive_rename": "rename a file in your Drive",
+    "google_drive_trash": "trash a file in your Drive",
     "google_drive_share": "share a Drive file with someone",
 }
 

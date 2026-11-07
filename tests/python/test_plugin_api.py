@@ -48,6 +48,7 @@ CONFIRM_REQUIRED = [
     ("/calendar/events/e1/cancel", {}),
     ("/calendar/events/e1/rsvp", {"response": "accepted"}),
     ("/drive/files/f1/rename", {"name": "Plan"}),
+    ("/drive/files/f1/trash", {}),
     ("/drive/files/f1/share", {"email": "ana@example.com"}),
     ("/docs/d1/replace", {"find": "Q3", "replace": "Q4"}),
     ("/sheets/s1/range", {"range": "Budget!A1", "rows": [["a"]]}),
@@ -154,7 +155,7 @@ def test_modify_route_changes_labels_without_a_confirmation_step(api_client):
 
 def test_modify_route_rejects_unknown_actions(api_client):
     client, google = api_client
-    response = client.post(PREFIX + "/gmail/m1/modify", json={"action": "trash"})
+    response = client.post(PREFIX + "/gmail/m1/modify", json={"action": "explode"})
     assert response.status_code == 400
     assert google.calls == []
 
@@ -374,3 +375,42 @@ def test_contact_update_route_keeps_existing_details(api_client):
     body = google.calls[1][2]
     assert [e["value"] for e in body["emailAddresses"]] == ["ana@acme.test", "bo@acme.test"]
     assert "names" not in body
+
+
+def test_calendar_month_route_returns_the_month(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"items": []}))
+    response = client.get(PREFIX + "/calendar/month", params={"month": "2026-11"})
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["month"] == "2026-11"
+    assert data["count"] == 0
+
+
+def test_calendar_month_route_rejects_a_bad_month(api_client):
+    client, google = api_client
+    response = client.get(PREFIX + "/calendar/month", params={"month": "2026-13"})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "bad_request"
+    assert google.calls == []
+
+
+def test_drive_trash_route_moves_the_file_to_the_trash(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {"id": "f1", "name": "Plan"}))
+    response = client.post(PREFIX + "/drive/files/f1/trash", json={"confirm": True})
+    assert response.status_code == 200
+    assert response.json()["data"]["trashed"] is True
+    assert google.methods() == ["PATCH"]
+
+
+def test_contact_delete_route_removes_the_contact(api_client):
+    client, google = api_client
+    google.queue(FakeResponse(200, {}))
+    response = client.post(
+        PREFIX + "/contacts/delete",
+        json={"resourceName": "people/c9", "confirm": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["deleted"] is True
+    assert google.methods() == ["DELETE"]

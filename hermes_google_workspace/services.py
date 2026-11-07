@@ -439,11 +439,12 @@ _MODIFY_ACTIONS: dict[str, tuple[list[str], list[str]]] = {
     "star": (["STARRED"], []),
     "unstar": ([], ["STARRED"]),
     "archive": ([], ["INBOX"]),
+    "trash": (["TRASH"], ["INBOX"]),
 }
 
 
 def gmail_modify(message_id: str, action: str) -> dict:
-    """Read, star or archive one message. Returns the message's resulting label state."""
+    """Read, star, archive or trash one message. Returns the message's resulting label state."""
     if action not in _MODIFY_ACTIONS:
         raise WorkspaceError(
             "bad_request",
@@ -537,6 +538,42 @@ def calendar_agenda(days: int = 7, max_results: int = 20, calendar_id: str = "pr
     events = [_event_summary(e) for e in (payload.get("items") or []) if isinstance(e, dict)]
     return {
         "calendarId": calendar_id,
+        "from": rfc3339(start),
+        "to": rfc3339(end),
+        "events": events,
+        "count": len(events),
+    }
+
+
+def calendar_month(month: str = "", max_results: int = 200, calendar_id: str = "primary") -> dict:
+    """Every event inside one calendar month, for the month grid."""
+    raw = str(month or "").strip()
+    if raw:
+        try:
+            year, mon = (int(part) for part in raw.split("-"))
+            if not 1 <= mon <= 12:
+                raise ValueError("month out of range")
+        except (TypeError, ValueError):
+            raise WorkspaceError("bad_request", "month must be YYYY-MM.")
+    else:
+        today = now_utc()
+        year, mon = today.year, today.month
+    start = datetime(year, mon, 1, tzinfo=timezone.utc)
+    end = datetime(year + (mon == 12), (mon % 12) + 1, 1, tzinfo=timezone.utc)
+    payload, _ = get(
+        _calendar_url(calendar_id),
+        params={
+            "timeMin": rfc3339(start),
+            "timeMax": rfc3339(end),
+            "singleEvents": True,
+            "orderBy": "startTime",
+            "maxResults": client.clamp(max_results, 1, 250, 200),
+        },
+    )
+    events = [_event_summary(e) for e in (payload.get("items") or []) if isinstance(e, dict)]
+    return {
+        "calendarId": calendar_id,
+        "month": f"{year:04d}-{mon:02d}",
         "from": rfc3339(start),
         "to": rfc3339(end),
         "events": events,
@@ -949,6 +986,21 @@ def drive_rename(file_id: str, name: str) -> dict:
     )
     summary = _file_summary(payload if isinstance(payload, dict) else {})
     summary["renamed"] = True
+    return summary
+
+
+def drive_trash(file_id: str) -> dict:
+    """Move one Drive file to the trash. Recoverable from Google Drive."""
+    key = str(file_id or "").strip()
+    if not key:
+        raise WorkspaceError("bad_request", "A file id is required.")
+    payload, _ = patch(
+        f"{client.DRIVE_ROOT}/files/{quote(key, safe='')}",
+        {"trashed": True},
+        params={"fields": _DRIVE_FIELDS, "supportsAllDrives": True},
+    )
+    summary = _file_summary(payload if isinstance(payload, dict) else {})
+    summary["trashed"] = True
     return summary
 
 
@@ -1424,6 +1476,16 @@ def contacts_update(resource_name: str, *, name: str = "", email: str = "", phon
     summary = _person_summary(updated if isinstance(updated, dict) else {})
     summary["updated"] = True
     return summary
+
+
+def contacts_delete(resource_name: str) -> dict:
+    """Delete one contact. Google keeps a 30-day undo in the People app."""
+    resource = str(resource_name or "").strip()
+    person_id = resource[len("people/"):].strip() if resource.startswith("people/") else ""
+    if not person_id:
+        raise WorkspaceError("bad_request", "Use a contact's resource name, such as people/c1234.")
+    delete(f"{client.PEOPLE_ROOT}/people/{quote(person_id, safe='')}")
+    return {"resourceName": f"people/{person_id}", "deleted": True}
 
 
 def _split_name(name: str) -> dict:

@@ -403,15 +403,15 @@ SCHEMAS: list[dict] = [
     {
         "name": "google_gmail_modify",
         "description": (
-            "Change one Gmail message: mark it read or unread, star or unstar it, or archive it "
-            "(remove it from the Inbox). Reversible and sends nothing, so it needs no approval. "
-            "Use it when the user asks to triage, tidy or follow up on a message."
+            "Change one Gmail message: mark it read or unread, star or unstar it, archive it "
+            "(remove it from the Inbox) or trash it (move it to Trash). Reversible and sends "
+            "nothing, so it needs no approval. Use it when the user asks to triage, tidy or follow up."
         ),
         "parameters": _schema({
             "message_id": {"type": "string", "description": "Gmail message id."},
             "action": {
                 "type": "string",
-                "enum": ["mark_read", "mark_unread", "star", "unstar", "archive"],
+                "enum": ["mark_read", "mark_unread", "star", "unstar", "archive", "trash"],
                 "description": "The change to make.",
             },
         }, ["message_id", "action"]),
@@ -776,6 +776,16 @@ SCHEMAS: list[dict] = [
         }, ["resource_name"]),
     },
     {
+        "name": "google_contacts_delete",
+        "description": (
+            "Delete one Google contact. Google keeps a 30-day undo in the People app. "
+            "Requires human approval."
+        ),
+        "parameters": _schema({
+            "resource_name": {"type": "string", "description": "Contact id from contacts search, e.g. people/c123."},
+        }, ["resource_name"]),
+    },
+    {
         "name": "google_drive_get",
         "description": "Get one Drive file's details: name, type, owners, modified time and link. Read-only.",
         "parameters": _schema({"file_id": {"type": "string"}}, ["file_id"]),
@@ -787,6 +797,16 @@ SCHEMAS: list[dict] = [
             "file_id": {"type": "string"},
             "name": {"type": "string", "description": "The new name."},
         }, ["file_id", "name"]),
+    },
+    {
+        "name": "google_drive_trash",
+        "description": (
+            "Move a Drive file to the trash. The owner can restore it from Google Drive. "
+            "Requires human approval."
+        ),
+        "parameters": _schema({
+            "file_id": {"type": "string"},
+        }, ["file_id"]),
     },
     {
         "name": "google_drive_share",
@@ -906,6 +926,14 @@ def _h_drive_rename(args: dict) -> dict:
     return services.drive_rename(_required(args, "file_id"), _required(args, "name"))
 
 
+def _h_drive_trash(args: dict) -> dict:
+    return services.drive_trash(_required(args, "file_id"))
+
+
+def _h_contacts_delete(args: dict) -> dict:
+    return services.contacts_delete(_required(args, "resource_name"))
+
+
 def _h_drive_share(args: dict) -> dict:
     return services.drive_share(
         _required(args, "file_id"),
@@ -951,8 +979,10 @@ _HANDLERS: dict[str, Callable[[dict], dict]] = {
     "google_sheets_update_range": _h_sheets_update_range,
     "google_sheets_create_tab": _h_sheets_create_tab,
     "google_contacts_update": _h_contacts_update,
+    "google_contacts_delete": _h_contacts_delete,
     "google_drive_get": _h_drive_get,
     "google_drive_rename": _h_drive_rename,
+    "google_drive_trash": _h_drive_trash,
     "google_drive_share": _h_drive_share,
 }
 
@@ -992,8 +1022,10 @@ _EMOJI = {
     "google_sheets_update_range": "🔢",
     "google_sheets_create_tab": "🆕",
     "google_contacts_update": "📇",
+    "google_contacts_delete": "🗑️",
     "google_drive_get": "📎",
     "google_drive_rename": "🔤",
+    "google_drive_trash": "🗑️",
     "google_drive_share": "🔗",
 }
 

@@ -25,7 +25,9 @@ APPROVE_ALWAYS = {
     "google_sheets_update_range",
     "google_sheets_create_tab",
     "google_contacts_update",
+    "google_contacts_delete",
     "google_drive_rename",
+    "google_drive_trash",
     "google_drive_share",
 }
 
@@ -77,7 +79,9 @@ SAMPLE_ARGS = {
     "google_sheets_update_range": {"spreadsheet_id": "s1", "range": "A1", "rows": [["a"]]},
     "google_sheets_create_tab": {"spreadsheet_id": "s1", "title": "Q4"},
     "google_contacts_update": {"resource_name": "people/c1", "email": "bo@example.com"},
+    "google_contacts_delete": {"resource_name": "people/c1"},
     "google_drive_rename": {"file_id": "f1", "name": "Plan"},
+    "google_drive_trash": {"file_id": "f1"},
     "google_drive_share": {"file_id": "f1", "email": "ana@example.com"},
 }
 

@@ -9,19 +9,19 @@ The page header, the setup screen and the sidebar row carry the Google "G" mark.
 
 Nothing is sent, shared, created, moved, changed or cancelled until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
 
-> **Status: partly proven against a live Google account.** The automated tests (212 Python, 29 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
+> **Status: partly proven against a live Google account.** The automated tests (219 Python, 29 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
 
 ## What you can do
 
 | Area | In the sidebar page | Hermes tools |
 |---|---|---|
-| **Overview** | Unread count, today's agenda, recent files, workflow cards (meeting brief, invoices to Sheet, organise Drive), and a search across Gmail, Calendar and Drive. **Customize** reorders and hides the widgets; the arrangement is saved per profile | `google_search` |
-| **Gmail** | Inbox and search, read a message, mark read or unread, star, archive, compose, reply, forward, create an event from a message | `google_gmail_search`, `google_gmail_read`, `google_gmail_send`, `google_gmail_draft`, `google_gmail_modify` |
-| **Calendar** | Agenda, event details, new event with a live clash warning, meeting brief; edit an event, cancel an event you organise, reply Going, Maybe or Decline to an invitation | `google_calendar_agenda`, `google_calendar_check_availability`, `google_calendar_create_event`, `google_calendar_update_event`, `google_calendar_cancel_event`, `google_calendar_rsvp` |
-| **Drive** | Recent files, search with Docs, Sheets and Folders filters, file details, rename, share with one person, Organise Drive (preview, then move files into one folder) | `google_drive_search`, `google_drive_create_folder`, `google_drive_move`, `google_drive_rename`, `google_drive_share` |
+| **Workspace** | Unread count, today's agenda, recent files, workflow cards (meeting brief, invoices to Sheet, organise Drive), and a search across Gmail, Calendar and Drive. **Customize** turns the grid into a drag-and-drop board: pull a widget by its grip to a new cell, hide the ones you do not use, and the arrangement is saved per profile | `google_search` |
+| **Gmail** | Inbox and search, read a message, mark read or unread, star, archive, trash, compose, reply, forward, create an event from a message | `google_gmail_search`, `google_gmail_read`, `google_gmail_send`, `google_gmail_draft`, `google_gmail_modify` |
+| **Calendar** | Agenda and a real month grid — every day with the events that fall on it, so you can see the shape of the month and open a day. Event details, new event with a live clash warning, meeting brief; edit an event, cancel an event you organise, reply Going, Maybe or Decline to an invitation | `google_calendar_agenda`, `google_calendar_check_availability`, `google_calendar_create_event`, `google_calendar_update_event`, `google_calendar_cancel_event`, `google_calendar_rsvp` |
+| **Drive** | Recent files, search with Docs, Sheets and Folders filters, file details, rename, share with one person, trash, Organise Drive (preview, then move files into one folder) | `google_drive_search`, `google_drive_create_folder`, `google_drive_move`, `google_drive_rename`, `google_drive_trash`, `google_drive_share` |
 | **Docs** | List and search, read text, create, append text, replace text (every match, after review) | `google_docs_read`, `google_docs_create`, `google_docs_append`, `google_docs_replace_text` |
 | **Sheets** | List and search, preview a range, create a sheet, add rows after review, write up to 1,000 cells in a range (cells that already have values are kept unless you choose to replace them), add a tab | `google_sheets_read`, `google_sheets_create`, `google_sheets_append`, `google_sheets_update_range`, `google_sheets_create_tab` |
-| **Contacts** | Search, contact details, create a contact after review, edit a contact after review (existing emails and phone numbers are kept) | `google_contacts_search`, `google_contacts_create`, `google_contacts_update` |
+| **Contacts** | Search, contact details, create a contact after review, edit a contact after review (existing emails and phone numbers are kept), delete a contact after review | `google_contacts_search`, `google_contacts_create`, `google_contacts_update`, `google_contacts_delete` |
 | **Cross-app** | Meeting brief, email to event, invoices to Sheet, organise Drive | `google_meeting_brief`, `google_email_to_event`, `google_invoices_to_sheet`, `google_organize_drive` |
 | **Hermes only** (no sidebar controls) | Search calendar events; forward a message in one step; edit a draft; read one Drive file's details; read a Sheet's tabs and row counts | `google_calendar_search`, `google_gmail_forward`, `google_gmail_update_draft`, `google_drive_get`, `google_sheets_metadata` |
 | **Settings** | What Hermes can reach, live connection status, sign-in and sign-out commands | none |
@@ -36,7 +36,7 @@ These are missing from the sidebar, from Hermes, or both:
 - **Drive:** upload and download; a tool that reads a file's contents (Docs and Sheets have their own read tools); a standalone new-folder action in the UI (folders are created by Organise Drive and by the Hermes tool).
 - **Docs:** formatting; a metadata tool.
 - **Sheets:** formatting.
-- **Contacts:** deleting; reading one contact by ID.
+- **Contacts:** reading one contact by ID.
 - **Account:** disconnecting inside the app (sign-out is a terminal command); more than one Google account.
 - **Services:** Slides, Tasks and Forms are not built, and their feasibility has not been investigated.
 
@@ -209,7 +209,7 @@ Workflows call the services module and never call Google directly. Each service 
 ## Testing
 
 ```bash
-# Python: 212 tests, no network. Use Python 3.13.
+# Python: 219 tests, no network. Use Python 3.13.
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/python
 

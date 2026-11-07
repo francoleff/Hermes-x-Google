@@ -451,7 +451,9 @@ NEW_TOOLS = {
     "google_gmail_update_draft",
     "google_gmail_forward",
     "google_contacts_update",
+    "google_contacts_delete",
     "google_drive_get",
     "google_drive_rename",
+    "google_drive_trash",
     "google_drive_share",
 }

@@ -49,9 +49,11 @@ EXPECTED_TOOLS = {
     "google_sheets_update_range",
     "google_sheets_create_tab",
     "google_contacts_update",
-    "google_drive_get",
+    "google_contacts_delete",
     "google_drive_rename",
+    "google_drive_trash",
     "google_drive_share",
+    "google_drive_get",
 }
 
 
@@ -121,6 +123,7 @@ def test_gmail_modify_only_offers_reversible_actions():
         "star",
         "unstar",
         "archive",
+        "trash",
     }
 
 

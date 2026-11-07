@@ -115,6 +115,51 @@ async function click(node) {
   await act(async () => { node.click() })
 }
 
+// jsdom has no layout, so the grid cells get real rectangles for the drag test.
+function stubGridRects() {
+  const rects = {
+    search: { left: 0, right: 400, top: 0, bottom: 100 },
+    stats: { left: 400, right: 800, top: 0, bottom: 100 },
+    agenda: { left: 0, right: 800, top: 100, bottom: 300 },
+    inbox: { left: 0, right: 400, top: 300, bottom: 400 },
+    drive: { left: 400, right: 800, top: 300, bottom: 400 },
+    workflows: { left: 0, right: 800, top: 400, bottom: 500 },
+  }
+  const original = HTMLElement.prototype.getBoundingClientRect
+  HTMLElement.prototype.getBoundingClientRect = function getRect() {
+    const id = this.getAttribute?.('data-widget-id')
+    const rect = rects[id] || { left: 0, right: 0, top: 0, bottom: 0 }
+    return { ...rect, width: rect.right - rect.left, height: rect.bottom - rect.top, x: rect.left, y: rect.top, toJSON: () => ({}) }
+  }
+  return () => { HTMLElement.prototype.getBoundingClientRect = original }
+}
+
+// Drag one widget by its handle onto another, the way a user rearranges the grid.
+async function dragWidget(fromLabel, toLabel) {
+  const restore = stubGridRects()
+  const handle = labelledButton(`Drag ${fromLabel}`)
+  const target = container.querySelector(`[data-widget-id="${toLabel.toLowerCase().replace(/ /g, '-')}"]`)
+  if (!handle || !target) throw new Error(`Cannot drag ${fromLabel} onto ${toLabel}.`)
+  const rect = target.getBoundingClientRect()
+  try {
+    await act(async () => {
+      handle.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 350 }))
+    })
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointermove', {
+        bubbles: true,
+        clientX: (rect.left + rect.right) / 2,
+        clientY: (rect.top + rect.bottom) / 2,
+      }))
+    })
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+  } finally {
+    restore()
+  }
+}
+
 function setInput(node, value) {
   const proto = node.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   const set = Object.getOwnPropertyDescriptor(proto, 'value').set
@@ -190,9 +235,9 @@ describe('connection', () => {
     mount(ctx)
     await until(() => tabs().length === 8, 'the eight service tabs')
     expect(tabs().map((node) => node.textContent.trim())).toEqual([
-      'Overview', 'Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Contacts', 'Settings',
+      'Workspace', 'Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Contacts', 'Settings',
     ])
-    expect(tab('Overview').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Workspace').getAttribute('aria-selected')).toBe('true')
 
     await click(tab('Contacts'))
     await until(() => ctx.rest.mock.calls.some(([path]) => path.startsWith('/contacts')), 'the contacts request')
@@ -215,11 +260,11 @@ describe('connection', () => {
     await press('ArrowRight')
     expect(selected()).toBe('Gmail')
     await press('ArrowLeft')
-    expect(selected()).toBe('Overview')
+    expect(selected()).toBe('Workspace')
     await press('ArrowLeft')
     expect(selected()).toBe('Settings')
     await press('Home')
-    expect(selected()).toBe('Overview')
+    expect(selected()).toBe('Workspace')
     await press('End')
     expect(selected()).toBe('Settings')
   })
@@ -467,9 +512,9 @@ describe('overview widgets', () => {
     expect(widgetOrder()).toEqual(['search', 'stats', 'agenda', 'inbox', 'drive'])
     expect(ctx.storage.get('overview.layout', null).hidden).toEqual(['workflows'])
 
-    // Moving a widget earlier swaps it with its neighbour.
-    await click(labelledButton('Move Inbox earlier'))
-    expect(widgetOrder()).toEqual(['search', 'stats', 'inbox', 'agenda', 'drive'])
+    // Dragging a widget onto another drops it at that widget's place.
+    await dragWidget('Inbox', 'stats')
+    expect(widgetOrder()).toEqual(['search', 'inbox', 'stats', 'agenda', 'drive'])
 
     // Resetting restores the default arrangement.
     await click(button('Reset to default'))
@@ -504,9 +549,17 @@ describe('overview widgets', () => {
 
 describe('source guards', () => {
   it('uses theme variables instead of hard-coded colours, except the Google brand mark', () => {
-    // The four colours below are the Google "G" logo. They are the brand's, not a
-    // theme value, and the mark must not be recoloured by the surrounding text.
-    const allowed = ['#4285F4', '#34A853', '#FBBC05', '#EA4335']
+    // The Google "G" mark and the six product marks are the brand's own colours;
+    // they must not be recoloured by the surrounding text.
+    const allowed = [
+      '#4285F4', '#34A853', '#FBBC05', '#EA4335',
+      '#4285f4', '#34a853', '#fbbc04', '#ea4335', '#c5221f',
+      '#FFFFFF', '#1A73E8', '#188038', '#1967D2',
+      '#0066da', '#00ac47', '#00832d', '#FBBC04',
+      '#3086F6', '#0C67D6', '#FDFFFF',
+      '#fff',
+      '#86a9ff', '#578cff', '#0057cc',
+    ]
     const found = PLUGIN_SOURCE.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []
     expect(found.filter((colour) => !allowed.includes(colour))).toEqual([])
   })

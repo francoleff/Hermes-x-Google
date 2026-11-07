@@ -296,6 +296,11 @@ def calendar(days: int = Query(7, ge=1, le=90), max_results: int = Query(30, ge=
     return _envelope(_run(lambda: services.calendar_agenda(days, max_results), ("calendar", days, max_results)))
 
 
+@router.get("/calendar/month")
+def calendar_month(month: str = Query(""), max_results: int = Query(200, ge=1, le=250)) -> dict:
+    return _envelope(_run(lambda: services.calendar_month(month, max_results), ("calendar_month", month, max_results)))
+
+
 @router.get("/drive")
 def drive(
     query: str = Query(""),
@@ -719,6 +724,18 @@ def share_file(file_id: str, payload: dict = Body(...)) -> dict:
     return _envelope(result)
 
 
+@router.post("/drive/files/{file_id}/trash")
+def trash_file(file_id: str, payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "trash a Drive file")
+    try:
+        result = services.drive_trash(file_id)
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
 @router.post("/docs/{document_id}/replace")
 def replace_doc_text(document_id: str, payload: dict = Body(...)) -> dict:
     body = _body(payload)
@@ -778,6 +795,18 @@ def update_contact(payload: dict = Body(...)) -> dict:
             organization=str(body.get("organization") or ""),
             title=str(body.get("title") or ""),
         )
+    except WorkspaceError as exc:
+        raise _http(exc) from None
+    _invalidate()
+    return _envelope(result)
+
+
+@router.post("/contacts/delete")
+def delete_contact(payload: dict = Body(...)) -> dict:
+    body = _body(payload)
+    _require_confirm(body, "delete a Google contact")
+    try:
+        result = services.contacts_delete(str(body.get("resourceName") or ""))
     except WorkspaceError as exc:
         raise _http(exc) from None
     _invalidate()

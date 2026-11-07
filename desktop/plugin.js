@@ -16,7 +16,7 @@ import {
   ROUTES_AREA, SIDEBAR_NAV_AREA, PALETTE_AREA,
 } from '@hermes/plugin-sdk'
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
-import { useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 
 const PLUGIN_ID = 'google-workspace'
 const QK = [PLUGIN_ID]
@@ -38,24 +38,15 @@ const GOOGLE_LINKS = {
 }
 
 const TABS = [
-  { id: 'Overview', label: 'Overview', icon: 'home' },
-  { id: 'Gmail', label: 'Gmail', icon: 'mail' },
-  { id: 'Calendar', label: 'Calendar', icon: 'calendar' },
-  { id: 'Drive', label: 'Drive', icon: 'cloud' },
-  { id: 'Docs', label: 'Docs', icon: 'book' },
-  { id: 'Sheets', label: 'Sheets', icon: 'table' },
-  { id: 'Contacts', label: 'Contacts', icon: 'organization' },
+  { id: 'Overview', label: 'Workspace', icon: 'home' },
+  { id: 'Gmail', label: 'Gmail', icon: 'mail', service: 'gmail' },
+  { id: 'Calendar', label: 'Calendar', icon: 'calendar', service: 'calendar' },
+  { id: 'Drive', label: 'Drive', icon: 'cloud', service: 'drive' },
+  { id: 'Docs', label: 'Docs', icon: 'book', service: 'docs' },
+  { id: 'Sheets', label: 'Sheets', icon: 'table', service: 'sheets' },
+  { id: 'Contacts', label: 'Contacts', icon: 'organization', service: 'contacts' },
   { id: 'Settings', label: 'Settings', icon: 'settings-gear' },
 ]
-
-const SERVICE_ICONS = {
-  gmail: 'mail',
-  calendar: 'calendar',
-  drive: 'cloud',
-  docs: 'book',
-  sheets: 'table',
-  contacts: 'organization',
-}
 
 // ── Backend plumbing ─────────────────────────────────────────────────────────
 
@@ -329,6 +320,107 @@ function GoogleG({ className, size = '1rem' }) {
   })
 }
 
+// The six Google product marks, drawn from the official artwork. Each takes only a size,
+// so the same component serves a 0.9rem tab glyph and a 7rem empty state.
+function GmailIcon({ size = '1rem' }) {
+  return jsx('svg', {
+    viewBox: '52 42 88 66', width: size, height: size, 'aria-hidden': 'true',
+    style: { display: 'block', flexShrink: 0 },
+    children: [
+      jsx('path', { key: 'b', fill: '#4285f4', d: 'M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6' }),
+      jsx('path', { key: 'g', fill: '#34a853', d: 'M120 108h14c3.32 0 6-2.69 6-6V59l-20 15' }),
+      jsx('path', { key: 'y', fill: '#fbbc04', d: 'M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2' }),
+      jsx('path', { key: 'r', fill: '#ea4335', d: 'M72 74V48l24 18 24-18v26L96 92' }),
+      jsx('path', { key: 'd', fill: '#c5221f', d: 'M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2' }),
+    ],
+  })
+}
+
+function CalendarIcon({ size = '1rem' }) {
+  return jsx('svg', {
+    viewBox: '0 0 200 200', width: size, height: size, 'aria-hidden': 'true',
+    style: { display: 'block', flexShrink: 0 },
+    children: jsx('g', { transform: 'translate(3.75 3.75)', children: [
+      jsx('path', { key: 'w', fill: '#FFFFFF', d: 'M148.882,43.618l-47.368-5.263l-57.895,5.263L38.355,96.25l5.263,52.632l52.632,6.579l52.632-6.579l5.263-53.947L148.882,43.618z' }),
+      jsx('path', { key: 't1', fill: '#1A73E8', d: 'M65.211,125.276c-3.934-2.658-6.658-6.539-8.145-11.671l9.132-3.763c0.829,3.158,2.276,5.605,4.342,7.342c2.053,1.737,4.553,2.592,7.474,2.592c2.987,0,5.553-0.908,7.697-2.724s3.224-4.132,3.224-6.934c0-2.868-1.132-5.211-3.395-7.026s-5.105-2.724-8.5-2.724h-5.276v-9.039H76.5c2.921,0,5.382-0.789,7.382-2.368c2-1.579,3-3.737,3-6.487c0-2.447-0.895-4.395-2.684-5.855s-4.053-2.197-6.803-2.197c-2.684,0-4.816,0.711-6.395,2.145s-2.724,3.197-3.447,5.276l-9.039-3.763c1.197-3.395,3.395-6.395,6.618-8.987c3.224-2.592,7.342-3.895,12.342-3.895c3.697,0,7.026,0.711,9.974,2.145c2.947,1.434,5.263,3.421,6.934,5.947c1.671,2.539,2.5,5.382,2.5,8.539c0,3.224-0.776,5.947-2.329,8.184c-1.553,2.237-3.461,3.947-5.724,5.145v0.539c2.987,1.25,5.421,3.158,7.342,5.724c1.908,2.566,2.868,5.632,2.868,9.211s-0.908,6.776-2.724,9.579c-1.816,2.803-4.329,5.013-7.513,6.618c-3.197,1.605-6.789,2.421-10.776,2.421C73.408,129.263,69.145,127.934,65.211,125.276z' }),
+      jsx('path', { key: 't2', fill: '#1A73E8', d: 'M121.25,79.961l-9.974,7.25l-5.013-7.605l17.987-12.974h6.895v61.197h-9.895L121.25,79.961z' }),
+      jsx('path', { key: 'r', fill: '#EA4335', d: 'M148.882,196.25l47.368-47.368l-23.684-10.526l-23.684,10.526l-10.526,23.684L148.882,196.25z' }),
+      jsx('path', { key: 'g', fill: '#34A853', d: 'M33.092,172.566l10.526,23.684h105.263v-47.368H43.618L33.092,172.566z' }),
+      jsx('path', { key: 'b', fill: '#4285F4', d: 'M12.039-3.75C3.316-3.75-3.75,3.316-3.75,12.039v136.842l23.684,10.526l23.684-10.526V43.618h105.263l10.526-23.684L148.882-3.75H12.039z' }),
+      jsx('path', { key: 'dg', fill: '#188038', d: 'M-3.75,148.882v31.579c0,8.724,7.066,15.789,15.789,15.789h31.579v-47.368H-3.75z' }),
+      jsx('path', { key: 'y', fill: '#FBBC04', d: 'M148.882,43.618v105.263h47.368V43.618l-23.684-10.526L148.882,43.618z' }),
+      jsx('path', { key: 'db', fill: '#1967D2', d: 'M196.25,43.618V12.039c0-8.724-7.066-15.789-15.789-15.789h-31.579v47.368H196.25z' }),
+    ] }),
+  })
+}
+
+function DriveIcon({ size = '1rem' }) {
+  return jsx('svg', {
+    viewBox: '0 0 87.3 78', width: size, height: size, 'aria-hidden': 'true',
+    style: { display: 'block', flexShrink: 0 },
+    children: [
+      jsx('path', { key: 'b', fill: '#0066da', d: 'm6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z' }),
+      jsx('path', { key: 'g', fill: '#00ac47', d: 'm43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z' }),
+      jsx('path', { key: 'r', fill: '#ea4335', d: 'm73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z' }),
+      jsx('path', { key: 'dg', fill: '#00832d', d: 'm43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z' }),
+      jsx('path', { key: 'y', fill: '#fbbc04', d: 'm59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z' }),
+    ],
+  })
+}
+
+function DocsIcon({ size = '1rem' }) {
+  return jsx('svg', {
+    viewBox: '0 0 64 88', width: size, height: size, 'aria-hidden': 'true',
+    style: { display: 'block', flexShrink: 0 },
+    children: [
+      jsx('path', { key: 'a', fill: '#3086F6', d: 'M58,88H6c-3.3,0-6-2.7-6-6V6c0-3.3,2.7-6,6-6h36l22,22v60C64,85.3,61.3,88,58,88z' }),
+      jsx('path', { key: 'b', fill: '#0C67D6', d: 'M42,0l22,22H42V0z' }),
+      jsx('path', { key: 'c', fill: '#FDFFFF', d: 'M50,39H14v-5h36V39z M50,46H14v5h36V46z M40,58H14v5h26V58z' }),
+    ],
+  })
+}
+
+function SheetsIcon({ size = '1rem' }) {
+  return jsx('svg', {
+    viewBox: '0 0 64 88', width: size, height: size, 'aria-hidden': 'true',
+    style: { display: 'block', flexShrink: 0 },
+    children: [
+      jsx('path', { key: 'a', fill: '#188038', d: 'M 42,0 64,22 53,24 42,22 40,11 Z' }),
+      jsx('path', { key: 'b', fill: '#34a853', d: 'M 42,22 V 0 H 6 C 2.685,0 0,2.685 0,6 v 76 c 0,3.315 2.685,6 6,6 h 52 c 3.315,0 6,-2.685 6,-6 V 22 Z' }),
+      jsx('path', { key: 'c', fill: '#fff', d: 'M 12,34 V 63 H 52 V 34 Z M 29.5,58 H 17 v -7 h 12.5 z m 0,-12 H 17 V 39 H 29.5 Z M 47,58 H 34.5 V 51 H 47 Z M 47,46 H 34.5 V 39 H 47 Z' }),
+    ],
+  })
+}
+
+function ContactsIcon({ size = '1rem' }) {
+  return jsx('svg', {
+    viewBox: '0 0 500 500', width: size, height: size, 'aria-hidden': 'true',
+    style: { display: 'block', flexShrink: 0 },
+    children: [
+      jsx('path', { key: 'a', fill: '#86a9ff', d: 'M199 244c-89 0-161 71-161 160v67c0 16 13 29 29 29h77l77-256z' }),
+      jsx('path', { key: 'b', fill: '#578cff', d: 'M462 349c0-58-48-105-106-105h-77v256h77c58 0 106-47 106-106' }),
+      jsx('path', { key: 'c', fill: '#0057cc', d: 'M115 349c0-58 48-105 106-105h58c58 0 106 47 106 105v45c0 59-48 106-106 106H144c-16 0-29-13-29-29z' }),
+      jsx('circle', { key: 'd', cx: '250', cy: '99.4', r: '99.4', fill: '#0057cc' }),
+    ],
+  })
+}
+
+const APP_ICONS = {
+  gmail: GmailIcon,
+  calendar: CalendarIcon,
+  drive: DriveIcon,
+  docs: DocsIcon,
+  sheets: SheetsIcon,
+  contacts: ContactsIcon,
+}
+
+const appIcon = (service) => APP_ICONS[service] || GoogleG
+
+function ServiceIcon({ service, size = '0.9rem' }) {
+  const Mark = appIcon(service)
+  return jsx(Mark, { size })
+}
+
 function Spinner({ size = '0.9rem' }) {
   return jsx(Codicon, { name: 'refresh', size, spinning: true })
 }
@@ -411,6 +503,19 @@ function EmptyBlock({ icon = 'file', title, description, action }) {
       jsx('div', { style: { fontSize: '0.84rem', fontWeight: 600 }, children: title }),
       description ? jsx('div', { style: { fontSize: '0.76rem', color: 'var(--ui-text-tertiary)', maxWidth: '26rem', lineHeight: 1.5 }, children: description }) : null,
       action || null,
+    ],
+  })
+}
+
+// The right-hand panel's empty state. The service's own mark fills the pane, with the
+// title underneath, so a blank panel still says what it is for.
+function ServiceEmpty({ service, title, description }) {
+  return jsxs('div', {
+    style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '1.2rem', padding: '2rem', flex: 1, minHeight: 0 },
+    children: [
+      jsx('div', { style: { width: '10rem', height: '10rem', display: 'grid', placeItems: 'center' }, children: jsx(ServiceIcon, { service, size: '10rem' }) }),
+      jsx('div', { style: { fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.01em' }, children: title }),
+      description ? jsx('div', { style: { fontSize: '0.8rem', color: 'var(--ui-text-tertiary)', maxWidth: '30rem', lineHeight: 1.55 }, children: description }) : null,
     ],
   })
 }
@@ -552,7 +657,7 @@ function SetupView({ status, onRetry, retrying }) {
         jsx('div', { style: { ...surfaceStyle, overflow: 'hidden' }, children: rows.map((row, index) => jsxs('div', {
           style: { display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.65rem 0.8rem', borderTop: index ? '1px solid color-mix(in srgb, var(--ui-stroke-secondary) 55%, transparent)' : 'none' },
           children: [
-            jsx(Icon, { name: SERVICE_ICONS[row.id] || 'file', size: '0.9rem', color: 'var(--ui-text-tertiary)' }),
+            jsx(ServiceIcon, { service: row.id, size: '0.9rem' }),
             jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
               jsx('div', { style: { fontSize: '0.78rem', fontWeight: 500 }, children: row.label }),
               row.detail ? jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', marginTop: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: row.detail }) : null,
@@ -766,13 +871,18 @@ function readStoredLayout() {
 }
 
 function useOverviewLayout() {
-  const [layout, setLayout] = useState(readStoredLayout)
-  const save = (next) => {
+  const [layout, setLayoutState] = useState(readStoredLayout)
+  const ref = useRef(layout)
+  // Accepts a value or an updater, so a drag can reorder against the latest layout
+  // without a stale closure.
+  const setLayout = (updater) => {
+    const next = typeof updater === 'function' ? updater(ref.current) : updater
     const clean = normalizeLayout(next) || DEFAULT_LAYOUT
-    setLayout(clean)
+    ref.current = clean
+    setLayoutState(clean)
     try { pluginCtx?.storage?.set?.('overview.layout', clean) } catch { /* storage is optional */ }
   }
-  return [layout, save]
+  return [layout, setLayout]
 }
 
 function WidgetButton({ icon, label, onClick }) {
@@ -804,10 +914,12 @@ function WidgetSkeleton({ rows = 3 }) {
   })
 }
 
-// A widget plus, in edit mode, the controls that rearrange it. The toolbar floats over
-// the widget's corner so it never pushes the content around.
-function WidgetFrame({ def, editing, onMove, onHide, children }) {
+// A widget plus, in edit mode, a drag handle and a hide button. The toolbar floats over
+// the widget's corner so it never pushes the content around. The frame carries a ref so
+// the drag logic can measure the real grid cells.
+const WidgetFrame = forwardRef(function WidgetFrame({ def, editing, dragging, dropTarget, onDragStart, onHide, children }, ref) {
   return jsxs('div', {
+    ref,
     'data-widget-id': def.id,
     style: {
       gridColumn: def.span === 'full' ? '1 / -1' : undefined,
@@ -815,9 +927,11 @@ function WidgetFrame({ def, editing, onMove, onHide, children }) {
       minWidth: 0,
       display: 'flex',
       flexDirection: 'column',
-      outline: editing ? '1px dashed color-mix(in srgb, var(--ui-stroke-secondary) 90%, transparent)' : undefined,
+      outline: editing ? `1px dashed ${dropTarget ? 'var(--ui-accent)' : 'color-mix(in srgb, var(--ui-stroke-secondary) 90%, transparent)'}` : undefined,
       outlineOffset: editing ? '3px' : undefined,
       borderRadius: editing ? '12px' : undefined,
+      opacity: dragging ? 0.5 : 1,
+      transition: rowTransition,
     },
     children: [
       children,
@@ -829,37 +943,92 @@ function WidgetFrame({ def, editing, onMove, onHide, children }) {
           borderRadius: '8px',
         },
         children: [
-          jsx(WidgetButton, { icon: 'chevron-up', label: `Move ${def.label} earlier`, onClick: () => onMove(def.id, -1) }),
-          jsx(WidgetButton, { icon: 'chevron-down', label: `Move ${def.label} later`, onClick: () => onMove(def.id, 1) }),
+          jsx('button', {
+            type: 'button',
+            'aria-label': `Drag ${def.label}`,
+            title: `Drag ${def.label}`,
+            onPointerDown: (event) => onDragStart(def.id, event),
+            style: {
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '1.5rem', height: '1.4rem', padding: 0, border: 0, borderRadius: '5px',
+              background: 'transparent', color: 'var(--ui-text-tertiary)', cursor: 'grab', font: 'inherit',
+              touchAction: 'none',
+            },
+            children: jsx(Icon, { name: 'grip-vertical', size: '0.9rem' }),
+          }),
           jsx(WidgetButton, { icon: 'close', label: `Hide ${def.label}`, onClick: () => onHide(def.id) }),
         ],
       }) : null,
     ],
   })
-}
+})
 
 function OverviewTab({ status, overview, onOpenMessage, onOpenEvent, onOpenFile, onCompose, onEvent, onBrief, onOrganize, onInvoices }) {
   const data = overview.data || {}
   const errors = data.errors || {}
   const nextEvent = (data.events || [])[0]
   const unread = data.unread || 0
-  const [layout, saveLayout] = useOverviewLayout()
+  const [layout, setLayout] = useOverviewLayout()
   const [editing, setEditing] = useState(false)
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
+  const itemNodes = useRef(new Map())
+  const overIdRef = useRef(null)
 
   const visible = layout.order.filter((id) => !layout.hidden.includes(id))
   const hiddenDefs = WIDGET_DEFS.filter((def) => layout.hidden.includes(def.id))
 
-  function move(id, delta) {
-    const index = layout.order.indexOf(id)
-    const target = index + delta
-    if (index < 0 || target < 0 || target >= layout.order.length) return
-    const order = [...layout.order]
-    ;[order[index], order[target]] = [order[target], order[index]]
-    saveLayout({ ...layout, order })
+  const registerItem = (id) => (node) => {
+    if (node) itemNodes.current.set(id, node)
+    else itemNodes.current.delete(id)
   }
-  function hide(id) { saveLayout({ ...layout, hidden: [...layout.hidden, id] }) }
-  function show(id) { saveLayout({ ...layout, hidden: layout.hidden.filter((item) => item !== id) }) }
-  function resetLayout() { saveLayout(DEFAULT_LAYOUT) }
+
+  // Drop the dragged widget at the target's position in the order.
+  function dropOn(id, targetId) {
+    setLayout((prev) => {
+      const from = prev.order.indexOf(id)
+      const to = prev.order.indexOf(targetId)
+      if (from < 0 || to < 0 || from === to) return prev
+      const order = [...prev.order]
+      order.splice(to, 0, order.splice(from, 1)[0])
+      return { ...prev, order }
+    })
+  }
+
+  // Pointer-driven drag: track the pointer, find the cell it is over, and live-reorder.
+  function startDrag(id, event) {
+    event.preventDefault()
+    setDragId(id)
+    overIdRef.current = null
+    const onMove = (pointer) => {
+      const x = pointer.clientX
+      const y = pointer.clientY
+      let hit = null
+      for (const [key, node] of itemNodes.current) {
+        if (key === id) continue
+        const rect = node.getBoundingClientRect()
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) { hit = key; break }
+      }
+      if (hit && hit !== overIdRef.current) {
+        overIdRef.current = hit
+        setOverId(hit)
+        dropOn(id, hit)
+      }
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      overIdRef.current = null
+      setDragId(null)
+      setOverId(null)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  function hide(id) { setLayout((prev) => ({ ...prev, hidden: [...prev.hidden, id] })) }
+  function show(id) { setLayout((prev) => ({ ...prev, hidden: prev.hidden.filter((item) => item !== id) })) }
+  function resetLayout() { setLayout(DEFAULT_LAYOUT) }
 
   const loading = overview.isPending
   const failed = overview.isError
@@ -921,9 +1090,12 @@ function OverviewTab({ status, overview, onOpenMessage, onOpenEvent, onOpenFile,
       style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gridAutoFlow: 'dense', gap: '0.8rem', alignItems: 'start' },
       children: [
         ...visible.map((id) => jsx(WidgetFrame, {
+          ref: registerItem(id),
           def: widgetDef(id),
           editing,
-          onMove: move,
+          dragging: dragId === id,
+          dropTarget: overId === id,
+          onDragStart: startDrag,
           onHide: hide,
           children: renderWidget(id),
         }, id)),
@@ -1015,7 +1187,7 @@ function GmailTab({ selectedId, onSelect, onCompose, onEmailToEvent, narrow }) {
               ? jsx(LoadingBlock, { label: 'Opening message…', rows: 5 })
               : detail.isError ? jsx(InlineError, { error: detail.error, onRetry: detail.refetch })
               : jsx(MessageDetail, { message: detail.data, onCompose, onEmailToEvent, onSelect }) }),
-          ] }) : jsx(EmptyBlock, { icon: 'mail', title: 'Pick a message', description: 'Select a conversation on the left. Reads stay private; nothing is marked or sent without a button.' }),
+          ] }) : jsx(ServiceEmpty, { service: 'gmail', title: 'Pick a message', description: 'Select a conversation on the left. Reads stay private; nothing is marked or sent without a button.' }),
         ] }) : null,
       ],
     }),
@@ -1034,7 +1206,7 @@ function MessageDetail({ message, onCompose, onEmailToEvent, onSelect }) {
     try {
       await post(`/gmail/${encodeURIComponent(message.id)}/modify`, { action })
       refreshEverything()
-      if (action === 'archive') onSelect(null)
+      if (action === 'archive' || action === 'trash') onSelect(null)
     } catch (err) {
       host.notify({ kind: 'error', message: errorInfo(err, 'Could not change that message.').message })
     } finally {
@@ -1077,6 +1249,7 @@ function MessageDetail({ message, onCompose, onEmailToEvent, onSelect }) {
       jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'mark_read' || busy === 'mark_unread', onClick: () => modify(message.unread ? 'mark_read' : 'mark_unread'), children: message.unread ? 'Mark as read' : 'Mark as unread' }),
       jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'star' || busy === 'unstar', onClick: () => modify(starred ? 'unstar' : 'star'), children: starred ? 'Unstar' : 'Star' }),
       inInbox ? jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'archive', onClick: () => modify('archive'), children: 'Archive' }) : null,
+      jsx(Button, { variant: 'ghost', size: 'xs', loading: busy === 'trash', onClick: () => modify('trash'), children: 'Trash' }),
     ] }),
 
     jsx(Separator, {}),
@@ -1341,25 +1514,130 @@ const RESPONSE_STYLE = {
   needsAction: { color: 'var(--ui-text-quaternary)', label: 'No reply' },
 }
 
+function monthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function shiftMonthKey(key, delta) {
+  const [year, mon] = String(key || '').split('-').map(Number)
+  const base = year && mon ? new Date(year, mon - 1, 1) : new Date()
+  base.setMonth(base.getMonth() + delta)
+  return monthKey(base)
+}
+
+function monthLabel(month) {
+  const [year, mon] = String(month || '').split('-').map(Number)
+  if (!year || !mon) return ''
+  return new Date(year, mon - 1, 1).toLocaleDateString([], { month: 'long', year: 'numeric' })
+}
+
+function dayKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+}
+
+function fmtDayKey(key) {
+  const [year, mon, day] = String(key || '').split('-').map(Number)
+  if (!year || !mon || !day) return ''
+  return new Date(year, mon - 1, day).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+// The real month: a grid of days with the events that fall on them, so the calendar
+// shows the shape of the month rather than a flat list.
+function MonthCalendar({ month, events, selectedDay, onSelectDay }) {
+  const [year, mon] = String(month || '').split('-').map(Number)
+  const valid = Boolean(year && mon >= 1 && mon <= 12)
+  const first = valid ? new Date(year, mon - 1, 1) : new Date()
+  const daysInMonth = valid ? new Date(year, mon, 0).getDate() : 0
+  const cells = []
+  for (let index = 0; index < first.getDay(); index += 1) cells.push(null)
+  for (let day = 1; day <= daysInMonth; day += 1) cells.push(new Date(year, mon - 1, day))
+  while (cells.length % 7) cells.push(null)
+
+  const byDay = new Map()
+  for (const event of events || []) {
+    const start = asDate(event.start)
+    if (!start) continue
+    const key = dayKey(start)
+    if (!byDay.has(key)) byDay.set(key, [])
+    byDay.get(key).push(event)
+  }
+
+  const todayKey = dayKey(new Date())
+
+  return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.45rem' }, children: [
+    jsx('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.25rem' }, children: WEEKDAYS.map((day, index) => jsx('div', { style: { fontSize: '0.62rem', fontWeight: 600, color: 'var(--ui-text-quaternary)', textAlign: 'center', padding: '0.15rem 0' }, children: day }, index)) }),
+    jsx('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.25rem' }, children: cells.map((date, index) => {
+      if (!date) return jsx('div', { style: { minHeight: '5rem', borderRadius: '8px' } }, `blank-${index}`)
+      const key = dayKey(date)
+      const dayEvents = byDay.get(key) || []
+      const isToday = key === todayKey
+      const isSelected = selectedDay === key
+      return jsxs('button', {
+        type: 'button',
+        onClick: () => onSelectDay(isSelected ? '' : key),
+        style: {
+          minHeight: '5rem', borderRadius: '8px',
+          border: isToday ? '1px solid var(--ui-accent)' : '1px solid color-mix(in srgb, var(--ui-stroke-secondary) 65%, transparent)',
+          background: isSelected ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent',
+          color: 'inherit', font: 'inherit', cursor: 'pointer',
+          padding: '0.3rem 0.32rem', display: 'flex', flexDirection: 'column', gap: '0.12rem', textAlign: 'left',
+          transition: rowTransition,
+        },
+        children: [
+          jsx('span', { style: { fontSize: '0.7rem', fontWeight: isToday ? 600 : 500, color: isToday ? 'var(--ui-accent)' : 'var(--ui-text-tertiary)', lineHeight: 1 }, children: String(date.getDate()) }),
+          ...dayEvents.slice(0, 3).map((event) => jsx('span', { style: { fontSize: '0.57rem', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ui-text-secondary)', borderLeft: '2px solid var(--ui-accent)', paddingLeft: '0.22rem' }, children: event.allDay ? event.summary : `${fmtTime(event.start)} ${event.summary}` }, event.id)),
+          dayEvents.length > 3 ? jsx('span', { style: { fontSize: '0.55rem', color: 'var(--ui-text-quaternary)' }, children: `+${dayEvents.length - 3} more` }) : null,
+        ],
+      }, key)
+    }) }),
+  ] })
+}
+
 function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow, account }) {
+  const [view, setView] = useState('agenda')
   const [days, setDays] = useState(7)
+  const [month, setMonth] = useState(() => monthKey(new Date()))
+  const [selectedDay, setSelectedDay] = useState('')
   const agenda = useApi(`/calendar?days=${days}&max_results=100`, { extra: [days] })
-  const events = agenda.data?.events || []
+  const monthData = useApi(`/calendar/month?month=${month}`, { extra: [month] })
+  const agendaEvents = agenda.data?.events || []
+  const monthEvents = monthData.data?.events || []
+  const events = view === 'month' ? monthEvents : agendaEvents
   const selected = events.find((event) => event.id === selectedId) || null
   const groups = useMemo(() => groupEventsByDay(events), [events])
+  const dayEvents = useMemo(() => {
+    if (!selectedDay) return []
+    return monthEvents.filter((event) => {
+      const start = asDate(event.start)
+      return start ? dayKey(start) === selectedDay : false
+    })
+  }, [monthEvents, selectedDay])
 
   const showList = !narrow || !selectedId
   const showDetail = !narrow || !!selectedId
 
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.7rem', height: '100%', minHeight: 0 }, children: [
     jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }, children: [
-      jsx('div', { style: { display: 'flex', gap: '0.25rem', flex: 1 }, children: [7, 14, 30].map((value) => jsx(Button, {
-        variant: days === value ? 'secondary' : 'ghost',
-        size: 'sm',
-        onClick: () => setDays(value),
-        children: value === 7 ? 'Next 7 days' : `${value} days`,
-      }, value)) }),
-      jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => agenda.refetch(), children: 'Refresh' }),
+      jsxs('div', { style: { display: 'flex', gap: '0.15rem', padding: '0.15rem', background: 'var(--ui-bg-secondary)', borderRadius: '8px', border: '1px solid var(--ui-stroke-secondary)' }, children: [
+        jsx(Button, { variant: view === 'agenda' ? 'secondary' : 'ghost', size: 'sm', onClick: () => setView('agenda'), children: 'Agenda' }),
+        jsx(Button, { variant: view === 'month' ? 'secondary' : 'ghost', size: 'sm', onClick: () => setView('month'), children: 'Month' }),
+      ] }),
+      view === 'agenda'
+        ? jsx('div', { style: { display: 'flex', gap: '0.25rem' }, children: [7, 14, 30].map((value) => jsx(Button, {
+            variant: days === value ? 'secondary' : 'ghost',
+            size: 'sm',
+            onClick: () => setDays(value),
+            children: value === 7 ? 'Next 7 days' : `${value} days`,
+          }, value)) })
+        : jsxs('div', { style: { display: 'flex', gap: '0.25rem' }, children: [
+            jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => setMonth((key) => shiftMonthKey(key, -1)), children: '‹' }),
+            jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => { setMonth(monthKey(new Date())); setSelectedDay('') }, children: 'Today' }),
+            jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => setMonth((key) => shiftMonthKey(key, 1)), children: '›' }),
+          ] }),
+      jsx('span', { style: { flex: 1 } }),
+      jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => (view === 'month' ? monthData.refetch() : agenda.refetch()), children: 'Refresh' }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: onCreateEvent, children: 'New event' }),
     ] }),
 
@@ -1368,32 +1646,43 @@ function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow, acc
       children: [
         showList ? jsxs(Panel, { style: { display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }, children: [
           jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 0.75rem', borderBottom: '1px solid color-mix(in srgb, var(--ui-stroke-secondary) 65%, transparent)' }, children: [
-            jsx('span', { style: { fontSize: '0.72rem', fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: 'Agenda' }),
-            agenda.data ? jsx('span', { style: { fontSize: '0.68rem', color: 'var(--ui-text-quaternary)' }, children: `${events.length} event${events.length === 1 ? '' : 's'}` }) : null,
+            jsx('span', { style: { fontSize: '0.72rem', fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: view === 'month' ? monthLabel(month) : 'Agenda' }),
+            (view === 'month' ? monthData.data : agenda.data) ? jsx('span', { style: { fontSize: '0.68rem', color: 'var(--ui-text-quaternary)' }, children: `${events.length} event${events.length === 1 ? '' : 's'}` }) : null,
           ] }),
-          jsx('div', { style: { overflow: 'auto', minHeight: 0, padding: '0.35rem' }, children: agenda.isPending
-            ? jsx(LoadingBlock, { label: 'Reading your calendar…', rows: 6 })
-            : agenda.isError ? jsx(InlineError, { error: agenda.error, onRetry: agenda.refetch })
-            : !events.length ? jsx(EmptyBlock, { icon: 'calendar', title: 'Nothing scheduled', description: `No events in the next ${days} days.`, action: jsx(Button, { variant: 'outline', size: 'xs', onClick: onCreateEvent, children: 'New event' }) })
-            : groups.map((group) => jsxs('div', { style: { marginBottom: '0.35rem' }, children: [
-              jsx('div', {
-                style: {
-                  position: 'sticky', top: 0, zIndex: 1, padding: '0.3rem 0.45rem',
-                  fontSize: '0.66rem', fontWeight: 600,
-                  color: 'var(--ui-text-quaternary)', background: 'var(--ui-bg-secondary)',
-                },
-                children: fmtDay(group.day),
-              }),
-              jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: group.events.map((event) => jsx('div', {
-                style: { borderRadius: '7px', background: event.id === selectedId ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent' },
-                children: jsx(EventRow, { event, onClick: () => onSelect(event.id) }),
-              }, event.id)) }),
-            ] }, group.key)) }),
+          jsx('div', { style: { overflow: 'auto', minHeight: 0, padding: '0.35rem' }, children: view === 'month'
+            ? monthData.isPending
+              ? jsx(LoadingBlock, { label: 'Reading your calendar…', rows: 6 })
+              : monthData.isError ? jsx(InlineError, { error: monthData.error, onRetry: monthData.refetch })
+                : jsx(MonthCalendar, { month, events: monthEvents, selectedDay, onSelectDay: setSelectedDay })
+            : agenda.isPending
+              ? jsx(LoadingBlock, { label: 'Reading your calendar…', rows: 6 })
+              : agenda.isError ? jsx(InlineError, { error: agenda.error, onRetry: agenda.refetch })
+                : !agendaEvents.length ? jsx(EmptyBlock, { icon: 'calendar', title: 'Nothing scheduled', description: `No events in the next ${days} days.`, action: jsx(Button, { variant: 'outline', size: 'xs', onClick: onCreateEvent, children: 'New event' }) })
+                : groups.map((group) => jsxs('div', { style: { marginBottom: '0.35rem' }, children: [
+                    jsx('div', {
+                      style: {
+                        position: 'sticky', top: 0, zIndex: 1, padding: '0.3rem 0.45rem',
+                        fontSize: '0.66rem', fontWeight: 600,
+                        color: 'var(--ui-text-quaternary)', background: 'var(--ui-bg-secondary)',
+                      },
+                      children: fmtDay(group.day),
+                    }),
+                    jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: group.events.map((event) => jsx('div', {
+                      style: { borderRadius: '7px', background: event.id === selectedId ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent' },
+                      children: jsx(EventRow, { event, onClick: () => onSelect(event.id) }),
+                    }, event.id)) }),
+                  ] }, group.key)) }),
+          view === 'month' && selectedDay ? jsxs('div', { style: { borderTop: '1px solid color-mix(in srgb, var(--ui-stroke-secondary) 65%, transparent)', padding: '0.5rem 0.6rem' }, children: [
+            jsx('div', { style: { fontSize: '0.66rem', fontWeight: 600, color: 'var(--ui-text-quaternary)', marginBottom: '0.3rem' }, children: fmtDayKey(selectedDay) }),
+            jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.05rem' }, children: dayEvents.length
+              ? dayEvents.map((event) => jsx('div', { style: { borderRadius: '7px', background: event.id === selectedId ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent' }, children: jsx(EventRow, { event, onClick: () => onSelect(event.id) }) }, event.id))
+              : jsx('div', { style: { fontSize: '0.72rem', color: 'var(--ui-text-tertiary)', padding: '0.2rem 0.45rem' }, children: 'Nothing scheduled that day.' }) }),
+          ] }) : null,
         ] }) : null,
 
         showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
           ? jsx(EventDetail, { event: selected, account, onBrief, onCreateEvent, onClose: narrow ? () => onSelect(null) : null })
-          : jsx(EmptyBlock, { icon: 'calendar', title: 'Pick a meeting', description: 'Choose an event to see guests, the agenda, and a briefing built from your mail and files.' }) }) : null,
+          : jsx(ServiceEmpty, { service: 'calendar', title: 'Pick a meeting', description: 'Choose an event to see guests, the agenda, and a briefing built from your mail and files.' }) }) : null,
       ],
     }),
   ] })
@@ -1790,7 +2079,7 @@ function DriveTab({ selectedFile, onSelect, onOrganize, onOpenDoc, onOpenSheet, 
 
         showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
           ? jsx(FileDetail, { file: selected, onOpenDoc, onOpenSheet, onChanged: (next) => onSelect(next), onClose: narrow ? () => onSelect(null) : null })
-          : jsx(EmptyBlock, { icon: 'cloud', title: 'Pick a file', description: 'Choose a file to see who owns it, when it changed, and where to open it.' }) }) : null,
+          : jsx(ServiceEmpty, { service: 'drive', title: 'Pick a file', description: 'Choose a file to see who owns it, when it changed, and where to open it.' }) }) : null,
       ],
     }),
   ] })
@@ -1799,6 +2088,7 @@ function DriveTab({ selectedFile, onSelect, onOrganize, onOpenDoc, onOpenSheet, 
 function FileDetail({ file, onOpenDoc, onOpenSheet, onChanged, onClose }) {
   const [renameOpen, setRenameOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [trashOpen, setTrashOpen] = useState(false)
   const isDoc = file.mimeType === MIME_DOC
   const isSheet = file.mimeType === MIME_SHEET
   const owners = file.owners || []
@@ -1823,9 +2113,11 @@ function FileDetail({ file, onOpenDoc, onOpenSheet, onChanged, onClose }) {
       file.webUrl ? jsx(Button, { variant: isDoc || isSheet ? 'outline' : 'default', size: 'sm', onClick: () => openUrl(file.webUrl), children: 'Open in Drive' }) : null,
       jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setRenameOpen(true), children: 'Rename' }),
       jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setShareOpen(true), children: 'Share' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => setTrashOpen(true), children: 'Trash' }),
     ] }),
     renameOpen ? jsx(RenameFileDialog, { file, onClose: () => setRenameOpen(false), onRenamed: (next) => onChanged?.(next) }) : null,
     shareOpen ? jsx(ShareFileDialog, { file, onClose: () => setShareOpen(false) }) : null,
+    trashOpen ? jsx(TrashFileDialog, { file, onClose: () => setTrashOpen(false), onTrashed: () => onChanged?.(null) }) : null,
 
     file.description ? jsxs('div', { children: [
       jsx(SectionHeading, { title: 'Description' }),
@@ -2018,7 +2310,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
               : jsx('div', { style: { ...insetStyle, padding: '0.85rem 0.95rem', fontSize: '0.8rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', color: 'var(--ui-text-secondary)', minHeight: '10rem' }, children: reader.data?.text || 'This document is empty. Use “Append text” to add the first paragraph.' }),
             jsx('div', { style: { fontSize: '0.67rem', color: 'var(--ui-text-quaternary)' }, children: `Read-only view. Characters beyond ${'20,000'} are truncated in Hermes; open the doc for the full text.` }),
           ] })
-          : jsx(EmptyBlock, { icon: 'book', title: 'Pick a document', description: 'Select a doc to read it here, or create a new one.' }) }) : null,
+          : jsx(ServiceEmpty, { service: 'docs', title: 'Pick a document', description: 'Select a doc to read it here, or create a new one.' }) }) : null,
       ],
     }),
     createOpen ? jsx(CreateDocDialog, {
@@ -2258,7 +2550,7 @@ function SheetsTab({ selectedSheet, onSelect, narrow }) {
               : jsx(SheetGrid, { values: preview.data?.values || [] }),
             jsx('div', { style: { fontSize: '0.67rem', color: 'var(--ui-text-quaternary)' }, children: `Showing ${SHEET_PREVIEW_RANGE}. Open the sheet for everything else.` }),
           ] })
-          : jsx(EmptyBlock, { icon: 'table', title: 'Pick a spreadsheet', description: 'Select one to preview its data here, or create a new one.' }) }) : null,
+          : jsx(ServiceEmpty, { service: 'sheets', title: 'Pick a spreadsheet', description: 'Select one to preview its data here, or create a new one.' }) }) : null,
       ],
     }),
     createOpen ? jsx(CreateSheetDialog, { onClose: () => setCreateOpen(false), onCreated: (sheet) => onSelect(sheet) }) : null,
@@ -2408,6 +2700,7 @@ function ContactRow({ contact, selected, onClick }) {
 
 function ContactDetail({ contact, onCompose, onClose }) {
   const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const primary = (contact.emails || [])[0] || ''
   const context = [contact.title, contact.organization].filter(Boolean).join(' · ')
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.9rem 1rem 1.2rem' }, children: [
@@ -2421,8 +2714,12 @@ function ContactDetail({ contact, onCompose, onClose }) {
     ] }),
     primary ? jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children:
       jsx(Button, { variant: 'default', size: 'sm', onClick: () => onCompose({ to: primary }), children: 'Write email' }) }) : null,
-    jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setEditOpen(true), children: 'Edit contact' }) }),
+    jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: jsxs('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: [
+      jsx(Button, { variant: 'outline', size: 'sm', onClick: () => setEditOpen(true), children: 'Edit contact' }),
+      jsx(Button, { variant: 'ghost', size: 'sm', onClick: () => setDeleteOpen(true), children: 'Delete' }),
+    ] }) }),
     editOpen ? jsx(EditContactDialog, { contact, onClose: () => setEditOpen(false) }) : null,
+    deleteOpen ? jsx(DeleteContactDialog, { contact, onClose: () => setDeleteOpen(false), onDeleted: () => onClose?.() }) : null,
     (contact.emails || []).length ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.4rem' }, children: [
       jsx(SectionHeading, { title: 'Email' }),
       ...contact.emails.map((email) => jsx(CopyRow, { text: email, label: 'Email' }, email)),
@@ -2478,7 +2775,7 @@ function ContactsTab({ selectedId, onSelect, onCompose, narrow }) {
 
         showDetail ? jsx(Panel, { style: { minHeight: 0, overflow: 'auto' }, children: selected
           ? jsx(ContactDetail, { contact: selected, onCompose, onClose: narrow ? () => onSelect(null) : null })
-          : jsx(EmptyBlock, { icon: 'organization', title: 'Pick a contact', description: 'Select someone to see their details, or add a new contact.' }) }) : null,
+          : jsx(ServiceEmpty, { service: 'contacts', title: 'Pick a contact', description: 'Select someone to see their details, or add a new contact.' }) }) : null,
       ],
     }),
     createOpen ? jsx(CreateContactDialog, { onClose: () => setCreateOpen(false), onCreated: (person) => onSelect(person.resourceName) }) : null,
@@ -2691,7 +2988,7 @@ function SettingsView({ status, onRetry, retrying }) {
       ...SCOPE_ROWS.map((scope, index) => jsxs('div', {
         style: { display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.55rem 0', borderTop: index ? '1px solid var(--ui-stroke-secondary)' : 'none' },
         children: [
-          jsx(Icon, { name: SERVICE_ICONS[scope.id] || 'file', size: '0.9rem', color: 'var(--ui-text-tertiary)' }),
+          jsx(ServiceIcon, { service: scope.id, size: '0.9rem' }),
           jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
             jsx('div', { style: { fontSize: '0.78rem', fontWeight: 500 }, children: scope.label }),
             jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', lineHeight: 1.45, marginTop: '0.1rem' }, children: scope.detail }),
@@ -2767,7 +3064,12 @@ function TabBar({ value, onChange }) {
           color: selected ? 'var(--ui-text-primary)' : 'var(--ui-text-tertiary)',
           background: selected ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent',
         },
-        children: [jsx(Icon, { name: item.icon, size: '0.8rem' }), jsx('span', { children: item.label })],
+        children: [
+          item.service
+            ? jsx(ServiceIcon, { service: item.service, size: '0.95rem' })
+            : jsx(Icon, { name: item.icon, size: '0.85rem' }),
+          jsx('span', { children: item.label }),
+        ],
       }, item.id)
     }),
   })
@@ -3005,6 +3307,44 @@ function RenameFileDialog({ file, onClose, onRenamed }) {
       { fallback: 'Could not rename the file.', success: () => 'File renamed.', onDone: (result) => { onRenamed?.(result); onClose() } },
     ),
     children: jsx(Field, { label: 'New name', children: jsx(Input, { value: name, autoFocus: true, onChange: (event) => setName(event.target.value) }) }),
+  })
+}
+
+function TrashFileDialog({ file, onClose, onTrashed }) {
+  return jsx(ReviewDialog, {
+    title: 'Trash file',
+    description: 'The file leaves its folder and goes to your Google Drive trash.',
+    ready: true,
+    reviewLabel: 'Review',
+    confirmTitle: `Trash “${file.name}”?`,
+    confirmDescription: 'You can restore it from Google Drive for 30 days. Shared links keep working until then.',
+    confirmLabel: 'Trash file',
+    summary: `File: ${file.name}\nRecoverable from Google Drive`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post(`/drive/files/${encodeURIComponent(file.id)}/trash`, { confirm: true }),
+      { fallback: 'Could not trash the file.', success: () => 'Moved to trash.', onDone: () => { onTrashed?.(); onClose() } },
+    ),
+    children: jsx('div', { style: { fontSize: '0.78rem', color: 'var(--ui-text-secondary)', lineHeight: 1.5 }, children: 'Anything shared with others keeps working until the file is permanently deleted from the trash.' }),
+  })
+}
+
+function DeleteContactDialog({ contact, onClose, onDeleted }) {
+  return jsx(ReviewDialog, {
+    title: 'Delete contact',
+    description: 'The contact is removed from your Google Contacts.',
+    ready: true,
+    reviewLabel: 'Review',
+    confirmTitle: `Delete “${contact.name || 'this contact'}”?`,
+    confirmDescription: 'Google keeps a 30-day undo in the People app, so you can bring them back.',
+    confirmLabel: 'Delete contact',
+    summary: `Contact: ${contact.name || 'Unnamed'}\nRecoverable in the People app for 30 days`,
+    onClose,
+    onConfirm: () => confirmedWrite(
+      () => post('/contacts/delete', { resourceName: contact.resourceName, confirm: true }),
+      { fallback: 'Could not delete the contact.', success: () => 'Contact deleted.', onDone: () => { onDeleted?.(); onClose() } },
+    ),
+    children: jsx('div', { style: { fontSize: '0.78rem', color: 'var(--ui-text-secondary)', lineHeight: 1.5 }, children: 'Their email history is not affected — only the contact entry is removed.' }),
   })
 }
 
