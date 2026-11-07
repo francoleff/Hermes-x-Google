@@ -294,12 +294,15 @@ const labelStyle = {
   display: 'block',
   fontSize: '0.7rem',
   fontWeight: 600,
-  letterSpacing: '0.02em',
   color: 'var(--ui-text-tertiary)',
   marginBottom: '0.35rem',
 }
 
 const inputStyle = { width: '100%' }
+
+// One easing curve across the plugin: short for feedback on hover and selection.
+const EASE = 'cubic-bezier(0.2, 0, 0, 1)'
+const rowTransition = `background-color 140ms ${EASE}, border-color 140ms ${EASE}`
 
 function Icon({ name, size = '1rem', color, style }) {
   return jsx(Codicon, { name, size, style: { color, ...style } })
@@ -339,7 +342,7 @@ function PageHeading({ title, subtitle, actions }) {
     style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' },
     children: [
       jsxs('div', { style: { minWidth: 0 }, children: [
-        jsx('h2', { style: { margin: 0, fontSize: '1.05rem', fontWeight: 650, letterSpacing: '-0.01em' }, children: title }),
+        jsx('h2', { style: { margin: 0, fontSize: '1.05rem', fontWeight: 600, letterSpacing: '-0.01em' }, children: title }),
         subtitle ? jsx('p', { style: { margin: '0.3rem 0 0', fontSize: '0.8rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.5 }, children: subtitle }) : null,
       ] }),
       actions ? jsx('div', { style: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }, children: actions }) : null,
@@ -352,7 +355,7 @@ function SectionHeading({ title, detail, action }) {
     style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.55rem' },
     children: [
       jsxs('div', { style: { display: 'flex', alignItems: 'baseline', gap: '0.5rem', minWidth: 0 }, children: [
-        jsx('h3', { style: { margin: 0, fontSize: '0.82rem', fontWeight: 650 }, children: title }),
+        jsx('h3', { style: { margin: 0, fontSize: '0.82rem', fontWeight: 600 }, children: title }),
         detail ? jsx('span', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)' }, children: detail }) : null,
       ] }),
       action || null,
@@ -419,7 +422,7 @@ function Avatar({ name, email, size = '1.7rem' }) {
       width: size, height: size, borderRadius: '999px', flexShrink: 0,
       display: 'grid', placeItems: 'center',
       background: 'color-mix(in srgb, var(--ui-accent) 16%, var(--ui-bg-tertiary))',
-      color: 'var(--ui-text-secondary)', fontSize: `calc(${size} * 0.38)`, fontWeight: 700,
+      color: 'var(--ui-text-secondary)', fontSize: `calc(${size} * 0.38)`, fontWeight: 600,
       border: '1px solid color-mix(in srgb, var(--ui-accent) 18%, transparent)',
     },
     children: initials(name, email),
@@ -488,7 +491,7 @@ function SetupView({ status, onRetry, retrying }) {
           children: jsx(GoogleG, { size: '1.3rem' }),
         }),
         jsxs('div', { style: { minWidth: 0 }, children: [
-          jsx('h2', { style: { margin: 0, fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' }, children: 'Connect Google Workspace' }),
+          jsx('h2', { style: { margin: 0, fontSize: '1.25rem', fontWeight: 600, letterSpacing: '-0.02em' }, children: 'Connect Google Workspace' }),
           jsx('p', { style: { margin: '0.35rem 0 0', fontSize: '0.82rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.55, maxWidth: '40rem' }, children: 'Hermes uses your own Google Cloud OAuth client. Nothing is bundled, no token is stored in this plugin, and you can revoke access from your Google Account at any time.' }),
         ] }),
       ] }),
@@ -496,8 +499,8 @@ function SetupView({ status, onRetry, retrying }) {
       jsxs('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(15rem, 20rem)', gap: '1rem', alignItems: 'start' }, children: [
         jsxs(Panel, { style: { padding: '1rem' }, children: [
           jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.8rem' }, children: [
-            jsx('span', { style: { width: '1.35rem', height: '1.35rem', borderRadius: '999px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', fontSize: '0.68rem', fontWeight: 700, color: 'var(--ui-text-secondary)' }, children: '1' }),
-            jsx('h3', { style: { margin: 0, fontSize: '0.84rem', fontWeight: 650 }, children: 'Create a Desktop OAuth client' }),
+            jsx('span', { style: { width: '1.35rem', height: '1.35rem', borderRadius: '999px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', fontSize: '0.68rem', fontWeight: 600, color: 'var(--ui-text-secondary)' }, children: '1' }),
+            jsx('h3', { style: { margin: 0, fontSize: '0.84rem', fontWeight: 600 }, children: 'Create a Desktop OAuth client' }),
           ] }),
           jsx('p', { style: { margin: '0 0 0.6rem', fontSize: '0.77rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.55 }, children: 'In Google Cloud, enable Gmail, Calendar, Drive, Docs, Sheets, and People, then create an OAuth client of type “Desktop app”.' }),
           jsxs('div', { style: { display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }, children: [
@@ -508,8 +511,8 @@ function SetupView({ status, onRetry, retrying }) {
 
         jsxs(Panel, { style: { padding: '1rem' }, children: [
           jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }, children: [
-            jsx('span', { style: { width: '1.35rem', height: '1.35rem', borderRadius: '999px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', fontSize: '0.68rem', fontWeight: 700, color: 'var(--ui-text-secondary)' }, children: '2' }),
-            jsx('h3', { style: { margin: 0, fontSize: '0.84rem', fontWeight: 650 }, children: 'Client status' }),
+            jsx('span', { style: { width: '1.35rem', height: '1.35rem', borderRadius: '999px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', fontSize: '0.68rem', fontWeight: 600, color: 'var(--ui-text-secondary)' }, children: '2' }),
+            jsx('h3', { style: { margin: 0, fontSize: '0.84rem', fontWeight: 600 }, children: 'Client status' }),
           ] }),
           jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.45rem' }, children: [
             jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.76rem' }, children: [
@@ -523,8 +526,8 @@ function SetupView({ status, onRetry, retrying }) {
 
       jsxs(Panel, { style: { padding: '1rem' }, children: [
         jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem' }, children: [
-          jsx('span', { style: { width: '1.35rem', height: '1.35rem', borderRadius: '999px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', fontSize: '0.68rem', fontWeight: 700, color: 'var(--ui-text-secondary)' }, children: '3' }),
-          jsx('h3', { style: { margin: 0, fontSize: '0.84rem', fontWeight: 650 }, children: 'Add the credentials and sign in' }),
+          jsx('span', { style: { width: '1.35rem', height: '1.35rem', borderRadius: '999px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', fontSize: '0.68rem', fontWeight: 600, color: 'var(--ui-text-secondary)' }, children: '3' }),
+          jsx('h3', { style: { margin: 0, fontSize: '0.84rem', fontWeight: 600 }, children: 'Add the credentials and sign in' }),
         ] }),
         jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.55rem' }, children: [
           jsx('p', { style: { margin: 0, fontSize: '0.75rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.5 }, children: 'Add these two lines to ~/.hermes/.env, replacing the values with the client id and secret Google gave you:' }),
@@ -543,7 +546,7 @@ function SetupView({ status, onRetry, retrying }) {
 
       jsxs('div', { children: [
         jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }, children: [
-          jsx('h3', { style: { margin: 0, fontSize: '0.82rem', fontWeight: 650 }, children: 'Service access' }),
+          jsx('h3', { style: { margin: 0, fontSize: '0.82rem', fontWeight: 600 }, children: 'Service access' }),
           jsx('span', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)' }, children: 'Checked live against Google' }),
         ] }),
         jsx('div', { style: { ...surfaceStyle, overflow: 'hidden' }, children: rows.map((row, index) => jsxs('div', {
@@ -551,7 +554,7 @@ function SetupView({ status, onRetry, retrying }) {
           children: [
             jsx(Icon, { name: SERVICE_ICONS[row.id] || 'file', size: '0.9rem', color: 'var(--ui-text-tertiary)' }),
             jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-              jsx('div', { style: { fontSize: '0.78rem', fontWeight: 550 }, children: row.label }),
+              jsx('div', { style: { fontSize: '0.78rem', fontWeight: 500 }, children: row.label }),
               row.detail ? jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', marginTop: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: row.detail }) : null,
             ] }),
             jsx(StateBadge, { state: row.state }),
@@ -573,10 +576,10 @@ function SetupView({ status, onRetry, retrying }) {
 function StatCard({ icon, label, value, detail, onClick }) {
   const content = jsxs(Fragment, { children: [
     jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }, children: [
-      jsx('span', { style: { fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.03em', color: 'var(--ui-text-tertiary)', textTransform: 'uppercase' }, children: label }),
+      jsx('span', { style: { fontSize: '0.7rem', fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: label }),
       jsx(Icon, { name: icon, size: '0.85rem', color: 'var(--ui-text-quaternary)' }),
     ] }),
-    jsx('div', { style: { fontSize: '1.5rem', fontWeight: 680, letterSpacing: '-0.03em', lineHeight: 1.15, marginTop: '0.45rem' }, children: value }),
+    jsx('div', { style: { fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.03em', lineHeight: 1.15, marginTop: '0.45rem' }, children: value }),
     detail ? jsx('div', { style: { fontSize: '0.71rem', color: 'var(--ui-text-quaternary)', marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: detail }) : null,
   ] })
   if (!onClick) return jsx('div', { style: { ...surfaceStyle, padding: '0.8rem 0.9rem', minWidth: 0 }, children: content })
@@ -594,7 +597,7 @@ function MessageRow({ message, onClick, showSnippet = true }) {
     style: {
       width: '100%', display: 'flex', gap: '0.65rem', alignItems: 'flex-start', textAlign: 'left',
       padding: '0.6rem 0.7rem', border: 0, borderRadius: '7px', background: 'transparent',
-      color: 'inherit', font: 'inherit', cursor: 'pointer',
+      color: 'inherit', font: 'inherit', cursor: 'pointer', transition: rowTransition,
     },
     onMouseEnter: (event) => { event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
     onMouseLeave: (event) => { event.currentTarget.style.background = 'transparent' },
@@ -621,7 +624,7 @@ function EventRow({ event, onClick, showDay = false }) {
     style: {
       width: '100%', display: 'flex', gap: '0.65rem', alignItems: 'flex-start', textAlign: 'left',
       padding: '0.55rem 0.7rem', border: 0, borderRadius: '7px', background: 'transparent',
-      color: 'inherit', font: 'inherit', cursor: 'pointer',
+      color: 'inherit', font: 'inherit', cursor: 'pointer', transition: rowTransition,
     },
     onMouseEnter: (event) => { event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
     onMouseLeave: (event) => { event.currentTarget.style.background = 'transparent' },
@@ -631,7 +634,7 @@ function EventRow({ event, onClick, showDay = false }) {
         showDay ? jsx('div', { style: { fontSize: '0.65rem', color: 'var(--ui-text-quaternary)' }, children: fmtDay(event.start) }) : null,
       ] }),
       jsxs('div', { style: { flex: 1, minWidth: 0, borderLeft: '2px solid color-mix(in srgb, var(--ui-accent) 35%, transparent)', paddingLeft: '0.6rem' }, children: [
-        jsx('div', { style: { fontSize: '0.78rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: event.summary }),
+        jsx('div', { style: { fontSize: '0.78rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: event.summary }),
         jsxs('div', { style: { display: 'flex', gap: '0.6rem', marginTop: '0.15rem', flexWrap: 'wrap' }, children: [
           event.location ? jsx(MetaLine, { icon: 'location', children: event.location }) : null,
           event.attendeeCount ? jsx(MetaLine, { icon: 'organization', children: `${event.attendeeCount} guest${event.attendeeCount === 1 ? '' : 's'}` }) : null,
@@ -648,14 +651,14 @@ function FileRow({ file, onClick }) {
     style: {
       width: '100%', display: 'flex', gap: '0.6rem', alignItems: 'center', textAlign: 'left',
       padding: '0.55rem 0.7rem', border: 0, borderRadius: '7px', background: 'transparent',
-      color: 'inherit', font: 'inherit', cursor: 'pointer',
+      color: 'inherit', font: 'inherit', cursor: 'pointer', transition: rowTransition,
     },
     onMouseEnter: (event) => { event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
     onMouseLeave: (event) => { event.currentTarget.style.background = 'transparent' },
     children: [
       jsx('span', { style: { width: '1.7rem', height: '1.7rem', borderRadius: '6px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', flexShrink: 0 }, children: jsx(Icon, { name: fileIcon(file.mimeType), size: '0.85rem', color: 'var(--ui-text-tertiary)' }) }),
       jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-        jsx('div', { style: { fontSize: '0.77rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: file.name }),
+        jsx('div', { style: { fontSize: '0.77rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: file.name }),
         jsxs('div', { style: { display: 'flex', gap: '0.5rem', fontSize: '0.67rem', color: 'var(--ui-text-quaternary)', marginTop: '0.1rem' }, children: [
           jsx('span', { children: mimeLabel(file.mimeType) }),
           file.modified ? jsx('span', { children: `· ${fmtRelative(file.modified)}` }) : null,
@@ -673,7 +676,7 @@ function WorkflowCard({ icon, title, detail, action, onClick }) {
     children: [
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.4rem' }, children: [
         jsx(Icon, { name: icon, size: '0.85rem', color: 'var(--ui-accent)' }),
-        jsx('span', { style: { fontSize: '0.78rem', fontWeight: 620 }, children: title }),
+        jsx('span', { style: { fontSize: '0.78rem', fontWeight: 600 }, children: title }),
       ] }),
       jsx('span', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', lineHeight: 1.45 }, children: detail }),
       jsx('span', { style: { fontSize: '0.7rem', color: 'var(--ui-text-tertiary)', marginTop: '0.1rem' }, children: action }),
@@ -984,7 +987,7 @@ function GmailTab({ selectedId, onSelect, onCompose, onEmailToEvent, narrow }) {
       children: [
         showList ? jsxs(Panel, { style: { display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }, children: [
           jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 0.7rem', borderBottom: '1px solid color-mix(in srgb, var(--ui-stroke-secondary) 65%, transparent)' }, children: [
-            jsx('span', { style: { fontSize: '0.72rem', fontWeight: 650, letterSpacing: '0.02em', color: 'var(--ui-text-tertiary)' }, children: query ? `Results for “${query}”` : 'Inbox' }),
+            jsx('span', { style: { fontSize: '0.72rem', fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: query ? `Results for “${query}”` : 'Inbox' }),
             jsx(Button, { variant: 'ghost', size: 'xs', onClick: () => list.refetch(), children: 'Refresh' }),
           ] }),
           jsxs('div', { style: { overflow: 'auto', minHeight: 0, padding: '0.3rem' }, children: [
@@ -1048,7 +1051,7 @@ function MessageDetail({ message, onCompose, onEmailToEvent, onSelect }) {
       jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
         jsxs('div', { style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }, children: [
           jsxs('div', { style: { minWidth: 0 }, children: [
-            jsx('h2', { style: { margin: 0, fontSize: '1.02rem', fontWeight: 650, lineHeight: 1.35 }, children: message.subject }),
+            jsx('h2', { style: { margin: 0, fontSize: '1.02rem', fontWeight: 600, lineHeight: 1.35 }, children: message.subject }),
             jsxs('div', { style: { marginTop: '0.35rem', fontSize: '0.75rem', color: 'var(--ui-text-tertiary)', lineHeight: 1.5 }, children: [
               jsx('strong', { style: { color: 'var(--ui-text-secondary)', fontWeight: 600 }, children: senderName(message.from) }),
               replyTo ? jsx('span', { children: ` <${replyTo}>` }) : null,
@@ -1083,7 +1086,7 @@ function MessageDetail({ message, onCompose, onEmailToEvent, onSelect }) {
       : jsx(EmptyBlock, { icon: 'mail', title: 'No readable body', description: 'This message may contain only HTML that could not be converted, or the body was too large.' }),
 
     (message.attachments || []).length ? jsxs('div', { style: { ...insetStyle, padding: '0.65rem' }, children: [
-      jsx('div', { style: { fontSize: '0.7rem', fontWeight: 650, color: 'var(--ui-text-tertiary)', marginBottom: '0.4rem' }, children: 'Attachments' }),
+      jsx('div', { style: { fontSize: '0.7rem', fontWeight: 600, color: 'var(--ui-text-tertiary)', marginBottom: '0.4rem' }, children: 'Attachments' }),
       jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.3rem' }, children: [
         message.attachments.map((attachment, index) => jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem' }, children: [
           jsx(Icon, { name: 'file', size: '0.8rem', color: 'var(--ui-text-quaternary)' }),
@@ -1365,7 +1368,7 @@ function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow, acc
       children: [
         showList ? jsxs(Panel, { style: { display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }, children: [
           jsxs('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 0.75rem', borderBottom: '1px solid color-mix(in srgb, var(--ui-stroke-secondary) 65%, transparent)' }, children: [
-            jsx('span', { style: { fontSize: '0.72rem', fontWeight: 650, letterSpacing: '0.02em', color: 'var(--ui-text-tertiary)' }, children: 'Agenda' }),
+            jsx('span', { style: { fontSize: '0.72rem', fontWeight: 600, color: 'var(--ui-text-tertiary)' }, children: 'Agenda' }),
             agenda.data ? jsx('span', { style: { fontSize: '0.68rem', color: 'var(--ui-text-quaternary)' }, children: `${events.length} event${events.length === 1 ? '' : 's'}` }) : null,
           ] }),
           jsx('div', { style: { overflow: 'auto', minHeight: 0, padding: '0.35rem' }, children: agenda.isPending
@@ -1376,7 +1379,7 @@ function CalendarTab({ selectedId, onSelect, onCreateEvent, onBrief, narrow, acc
               jsx('div', {
                 style: {
                   position: 'sticky', top: 0, zIndex: 1, padding: '0.3rem 0.45rem',
-                  fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                  fontSize: '0.66rem', fontWeight: 600,
                   color: 'var(--ui-text-quaternary)', background: 'var(--ui-bg-secondary)',
                 },
                 children: fmtDay(group.day),
@@ -1407,7 +1410,7 @@ function EventDetail({ event, account, onBrief, onCreateEvent, onClose }) {
     jsxs('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }, children: [
       onClose ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: onClose, children: 'Back' }) : null,
       jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-        jsx('h2', { style: { margin: 0, fontSize: '1.02rem', fontWeight: 650, lineHeight: 1.35 }, children: event.summary }),
+        jsx('h2', { style: { margin: 0, fontSize: '1.02rem', fontWeight: 600, lineHeight: 1.35 }, children: event.summary }),
         jsxs('div', { style: { display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '0.4rem' }, children: [
           jsx(MetaLine, { icon: 'calendar', children: event.allDay ? `${fmtDay(event.start)} · all day` : `${fmtDateTime(event.start)} – ${fmtTime(event.end)}` }),
           eventDuration(event) ? jsx(MetaLine, { icon: 'watch', children: eventDuration(event) }) : null,
@@ -1436,7 +1439,7 @@ function EventDetail({ event, account, onBrief, onCreateEvent, onClose }) {
         return jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.4rem', borderRadius: '6px' }, children: [
           jsx(Avatar, { name: person.name, email: person.email, size: '1.5rem' }),
           jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-            jsx('div', { style: { fontSize: '0.75rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.name || person.email }),
+            jsx('div', { style: { fontSize: '0.75rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.name || person.email }),
             person.name && person.email ? jsx('div', { style: { fontSize: '0.67rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.email }) : null,
           ] }),
           person.organizer ? jsx(Badge, { variant: 'muted', size: 'xs', children: 'Organizer' }) : null,
@@ -1644,7 +1647,7 @@ function BriefDialog({ eventId, query, onClose, onOpenMessage, onOpenFile }) {
                 (data.attendees || []).length ? jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.1rem' }, children: (data.attendees || []).map((person) => jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.25rem 0' }, children: [
                   jsx(Avatar, { name: person.name, email: person.email, size: '1.4rem' }),
                   jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-                    jsx('div', { style: { fontSize: '0.74rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.name || person.email }),
+                    jsx('div', { style: { fontSize: '0.74rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.name || person.email }),
                     jsx('div', { style: { fontSize: '0.66rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: person.email }),
                   ] }),
                   jsx('span', { style: { fontSize: '0.64rem', color: (RESPONSE_STYLE[person.response] || {}).color || 'var(--ui-text-quaternary)', flexShrink: 0 }, children: (RESPONSE_STYLE[person.response] || {}).label || person.response || '' }),
@@ -1660,7 +1663,7 @@ function BriefDialog({ eventId, query, onClose, onOpenMessage, onOpenFile }) {
                   onMouseEnter: (event) => { event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
                   onMouseLeave: (event) => { event.currentTarget.style.background = 'transparent' },
                   children: jsxs(Fragment, { children: [
-                    jsx('div', { style: { fontSize: '0.73rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: item.subject }),
+                    jsx('div', { style: { fontSize: '0.73rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: item.subject }),
                     jsxs('div', { style: { fontSize: '0.65rem', color: 'var(--ui-text-quaternary)', marginTop: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: [senderName(item.from), ' · ', fmtRelative(item.date)] }),
                   ] }),
                 }, item.id)) }) : jsx('div', { style: { fontSize: '0.73rem', color: 'var(--ui-text-quaternary)' }, children: 'No recent email with these guests.' }),
@@ -1804,7 +1807,7 @@ function FileDetail({ file, onOpenDoc, onOpenSheet, onChanged, onClose }) {
       onClose ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: onClose, children: 'Back' }) : null,
       jsx('span', { style: { width: '2.3rem', height: '2.3rem', borderRadius: '8px', background: 'var(--ui-bg-quaternary)', display: 'grid', placeItems: 'center', flexShrink: 0 }, children: jsx(Icon, { name: fileIcon(file.mimeType), size: '1.1rem', color: 'var(--ui-text-tertiary)' }) }),
       jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-        jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 650, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: file.name }),
+        jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: file.name }),
         jsxs('div', { style: { display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.35rem' }, children: [
           jsx(MetaLine, { icon: 'symbol-class', children: mimeLabel(file.mimeType) }),
           file.modified ? jsx(MetaLine, { icon: 'history', children: `Modified ${fmtRelative(file.modified)}` }) : null,
@@ -1835,7 +1838,7 @@ function FileDetail({ file, onOpenDoc, onOpenSheet, onChanged, onClose }) {
         owners.length ? jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '0.25rem' }, children: owners.map((owner) => jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.45rem' }, children: [
           jsx(Avatar, { name: owner.name, email: owner.email, size: '1.4rem' }),
           jsxs('div', { style: { minWidth: 0 }, children: [
-            jsx('div', { style: { fontSize: '0.74rem', fontWeight: 550 }, children: owner.name || owner.email }),
+            jsx('div', { style: { fontSize: '0.74rem', fontWeight: 500 }, children: owner.name || owner.email }),
             owner.name ? jsx('div', { style: { fontSize: '0.66rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis' }, children: owner.email }) : null,
           ] }),
         ] }, owner.email)) }) : jsx('span', { style: { fontSize: '0.73rem', color: 'var(--ui-text-quaternary)' }, children: 'Owner is hidden by Drive permissions.' }),
@@ -1997,7 +2000,7 @@ function DocsTab({ selectedDoc, onSelect, onOpenFile, narrow }) {
             jsxs('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }, children: [
               jsx(Button, { variant: 'ghost', size: 'xs', onClick: () => onSelect(null), children: 'Back' }),
               jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-                jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 650, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: reader.data?.title || current.name }),
+                jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: reader.data?.title || current.name }),
                 jsxs('div', { style: { display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.3rem' }, children: [
                   jsx(MetaLine, { icon: 'book', children: reader.data ? `${reader.data.characters.toLocaleString()} characters` : 'Google Doc' }),
                   current.modified ? jsx(MetaLine, { icon: 'history', children: fmtRelative(current.modified) }) : null,
@@ -2237,7 +2240,7 @@ function SheetsTab({ selectedSheet, onSelect, narrow }) {
             jsxs('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }, children: [
               narrow ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: () => onSelect(null), children: 'Back' }) : null,
               jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-                jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 650, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: current.name }),
+                jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere' }, children: current.name }),
                 jsx('div', { style: { display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.3rem' }, children: [
                   jsx(MetaLine, { icon: 'table', children: preview.data ? `${plural(preview.data.rows || 0, 'row')} in view` : 'Google Sheet' }),
                   current.modified ? jsx(MetaLine, { icon: 'history', children: fmtRelative(current.modified) }) : null,
@@ -2389,14 +2392,14 @@ function ContactRow({ contact, selected, onClick }) {
       width: '100%', display: 'flex', gap: '0.65rem', alignItems: 'center', textAlign: 'left',
       padding: '0.55rem 0.7rem', border: 0, borderRadius: '7px',
       background: selected ? 'var(--ui-row-active-background, var(--ui-row-hover-background))' : 'transparent',
-      color: 'inherit', font: 'inherit', cursor: 'pointer',
+      color: 'inherit', font: 'inherit', cursor: 'pointer', transition: rowTransition,
     },
     onMouseEnter: (event) => { if (!selected) event.currentTarget.style.background = 'var(--ui-row-hover-background)' },
     onMouseLeave: (event) => { if (!selected) event.currentTarget.style.background = 'transparent' },
     children: [
       jsx(Avatar, { name: contact.name, email, size: '1.6rem' }),
       jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-        jsx('div', { style: { fontSize: '0.78rem', fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: contact.name || email || 'No name' }),
+        jsx('div', { style: { fontSize: '0.78rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: contact.name || email || 'No name' }),
         jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: [contact.organization, email].filter(Boolean).join(' · ') }),
       ] }),
     ],
@@ -2412,7 +2415,7 @@ function ContactDetail({ contact, onCompose, onClose }) {
       onClose ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: onClose, children: 'Back' }) : null,
       jsx(Avatar, { name: contact.name, email: primary, size: '2.3rem' }),
       jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-        jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 650, overflowWrap: 'anywhere' }, children: contact.name || 'No name' }),
+        jsx('h2', { style: { margin: 0, fontSize: '1rem', fontWeight: 600, overflowWrap: 'anywhere' }, children: contact.name || 'No name' }),
         context ? jsx('div', { style: { marginTop: '0.2rem', fontSize: '0.75rem', color: 'var(--ui-text-tertiary)' }, children: context }) : null,
       ] }),
     ] }),
@@ -2690,7 +2693,7 @@ function SettingsView({ status, onRetry, retrying }) {
         children: [
           jsx(Icon, { name: SERVICE_ICONS[scope.id] || 'file', size: '0.9rem', color: 'var(--ui-text-tertiary)' }),
           jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
-            jsx('div', { style: { fontSize: '0.78rem', fontWeight: 550 }, children: scope.label }),
+            jsx('div', { style: { fontSize: '0.78rem', fontWeight: 500 }, children: scope.label }),
             jsx('div', { style: { fontSize: '0.7rem', color: 'var(--ui-text-quaternary)', lineHeight: 1.45, marginTop: '0.1rem' }, children: scope.detail }),
           ] }),
           jsx(StateBadge, { state: byId[scope.id]?.state || 'untested' }),
@@ -3245,7 +3248,7 @@ function GoogleWorkspacePage() {
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'space-between' }, children: [
         jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }, children: [
           jsx(GoogleG, { size: '1.05rem' }),
-          jsx('h1', { style: { margin: 0, fontSize: '0.95rem', fontWeight: 650 }, children: 'Google Workspace' }),
+          jsx('h1', { style: { margin: 0, fontSize: '0.95rem', fontWeight: 600 }, children: 'Google Workspace' }),
           connected && status.data?.account ? jsx('span', { style: { fontSize: '0.72rem', color: 'var(--ui-text-quaternary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: status.data.account }) : null,
         ] }),
         connected ? jsx(TabBar, { value: tab, onChange: setTab }) : null,
