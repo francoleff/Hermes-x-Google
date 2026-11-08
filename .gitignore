@@ -11,3 +11,6 @@ google_client_secret.json
 client_secret*.json
 *.log
 coverage/
+
+# Demo video build output (not part of the plugin)
+brag-output/

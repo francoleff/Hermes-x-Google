@@ -547,18 +547,78 @@ describe('overview widgets', () => {
   })
 })
 
+describe('service marks', () => {
+  // Each empty state has a unique title. The title sits in a text block, and that block sits in the pane.
+  const emptyState = (title) => [...container.querySelectorAll('div')].find((node) => node.children.length === 0 && node.textContent === title)?.parentElement?.parentElement ?? null
+
+  it('draws the 2026 Drive mark as three gradient facets, with no red corner', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    await click(tab('Drive'))
+    await until(() => emptyState('Pick a file'), 'the Drive empty state')
+    const mark = emptyState('Pick a file').firstElementChild.querySelector('svg')
+    const facets = [...mark.querySelectorAll('path')].filter((node) => node.getAttribute('fill')?.startsWith('url(#'))
+    expect(facets).toHaveLength(3)
+    expect(mark.innerHTML).not.toContain('#ea4335')
+  })
+
+  it('draws the 2026 Contacts mark with its official raster fade', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    await click(tab('Contacts'))
+    await until(() => emptyState('Pick a contact'), 'the Contacts empty state')
+    const image = emptyState('Pick a contact').firstElementChild.querySelector('svg image')
+    expect(image?.getAttribute('href')).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it("keeps each mark's gradients, masks and filters to its own ids", async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    // The tab bar shows all six product marks at once, so their ids share one document.
+    const markupById = new Map()
+    for (const node of container.querySelectorAll('[id]')) {
+      markupById.set(node.id, [...(markupById.get(node.id) || []), node.outerHTML])
+    }
+    expect(markupById.size).toBeGreaterThan(10)
+    for (const [id, markup] of markupById) {
+      expect(new Set(markup).size, `id "${id}" names different artwork in different marks`).toBe(1)
+    }
+    for (const [, id] of container.innerHTML.matchAll(/url\(#([^)]+)\)/g)) {
+      expect(markupById.has(id), `url(#${id}) must point at an element in the page`).toBe(true)
+    }
+  })
+
+  it('keeps the empty-state mark on the middle line of its pane', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 8, 'the eight service tabs')
+    await click(tab('Drive'))
+    await until(() => emptyState('Pick a file'), 'the Drive empty state')
+    const pane = emptyState('Pick a file')
+    expect(pane.style.height).toBe('100%')
+    expect(pane.style.gridTemplateRows).toBe('minmax(0, 1fr) auto minmax(0, 1fr)')
+    expect(pane.firstElementChild.style.gridRow).toBe('2')
+  })
+})
+
 describe('source guards', () => {
   it('uses theme variables instead of hard-coded colours, except the Google brand mark', () => {
     // The Google "G" mark and the six product marks are the brand's own colours;
     // they must not be recoloured by the surrounding text.
     const allowed = [
       '#4285F4', '#34A853', '#FBBC05', '#EA4335',
-      '#4285f4', '#34a853', '#fbbc04', '#ea4335', '#c5221f',
-      '#FFFFFF', '#1A73E8', '#188038', '#1967D2',
-      '#0066da', '#00ac47', '#00832d', '#FBBC04',
-      '#3086F6', '#0C67D6', '#FDFFFF',
       '#fff',
-      '#86a9ff', '#578cff', '#0057cc',
+      // The 2026 Workspace product marks: gradient stops, masks, and the Contacts figure.
+      '#009954', '#00a9bb', '#0ebc5f', '#3186FF', '#3186ff', '#336ef3', '#3c90ff', '#42c868', '#4fa0ff',
+      '#60d673', '#6d97ff', '#76BBFF', '#78c9ff', '#A9A8FF', '#a9a8ff', '#b43333', '#bbe2ff', '#fc413d',
+      '#fc5c30', '#feb10c', '#fec700', '#ff63a0', '#ffdb0f', '#ffe921',
     ]
     const found = PLUGIN_SOURCE.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []
     expect(found.filter((colour) => !allowed.includes(colour))).toEqual([])

@@ -9,7 +9,7 @@ The page header, the setup screen and the sidebar row carry the Google "G" mark.
 
 Nothing is sent, shared, created, moved, changed or cancelled until you approve it. Reading, searching, drafting and reversible label changes run without a prompt.
 
-> **Status: partly proven against a live Google account.** The automated tests (219 Python, 29 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
+> **Status: partly proven against a live Google account.** The automated tests (220 Python, 33 desktop UI) and the Hermes plugin validator pass. Plugin discovery, registration and the validator were checked in an isolated Hermes profile. The developer ran read-only checks against a real account, counts only: search across services, the agenda, Gmail, Drive, Docs, Sheets and Contacts, plus the newer calendar search, Drive file read and Sheets metadata. Each of the 14 newest writes was then run once against a test account, using items labelled `GW-TEST` that were removed afterwards, and read back: calendar update and cancel, Docs text replace, Drive rename and share, Sheets range write, refusal and overwrite, Sheets tab, Sheets metadata, contact update, Gmail draft update and Gmail forward. RSVP has **not** been run against Google, because the account had no invitation to answer. The sidebar actions have **not** been run inside the running Hermes Desktop app yet. Run the [live check](#live-check-what-to-run-with-your-own-account) before relying on it.
 
 ## What you can do
 
@@ -213,7 +213,7 @@ Workflows call the services module and never call Google directly. Each service 
 python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/python
 
-# Desktop UI: 29 tests under jsdom, against an SDK stand-in.
+# Desktop UI: 33 tests under jsdom, against an SDK stand-in.
 cd tests/js && npm install && npm test
 
 # Lint the desktop file for unresolved names and dead code.

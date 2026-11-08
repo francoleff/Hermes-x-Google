@@ -169,8 +169,9 @@ def _service_rows() -> list[dict]:
 
     # The request's profile secret scope is a contextvar, and ThreadPoolExecutor workers do
     # not inherit it — without this copy the probes read credentials unscoped and fail closed
-    # on a multiplexing gateway.
-    context = contextvars.copy_context()
+    # on a multiplexing gateway. Each probe needs its own copy: a Context can be entered by
+    # only one thread at a time, so sharing one raises "already entered".
+    jobs = [(name, contextvars.copy_context()) for name in _PROBES]
 
     def probe(name: str) -> None:
         try:
@@ -179,7 +180,7 @@ def _service_rows() -> list[dict]:
             errors[name] = exc.as_dict()
 
     with ThreadPoolExecutor(max_workers=len(_PROBES)) as pool:
-        list(pool.map(lambda name: context.run(probe, name), _PROBES))
+        list(pool.map(lambda job: job[1].run(probe, job[0]), jobs))
 
     for name in ("gmail", "calendar", "drive", "docs", "sheets", "contacts"):
         label = _SERVICE_LABELS[name]
