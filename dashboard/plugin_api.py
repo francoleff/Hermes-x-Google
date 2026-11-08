@@ -11,6 +11,7 @@ independent of the human clicking the button, so a stray request cannot send mai
 
 from __future__ import annotations
 
+import contextvars
 import sys
 import threading
 import time
@@ -166,6 +167,11 @@ def _service_rows() -> list[dict]:
     results: dict[str, tuple[str, str]] = {}
     errors: dict[str, dict] = {}
 
+    # The request's profile secret scope is a contextvar, and ThreadPoolExecutor workers do
+    # not inherit it — without this copy the probes read credentials unscoped and fail closed
+    # on a multiplexing gateway.
+    context = contextvars.copy_context()
+
     def probe(name: str) -> None:
         try:
             results[name] = _PROBES[name]()
@@ -173,7 +179,7 @@ def _service_rows() -> list[dict]:
             errors[name] = exc.as_dict()
 
     with ThreadPoolExecutor(max_workers=len(_PROBES)) as pool:
-        list(pool.map(probe, _PROBES))
+        list(pool.map(lambda name: context.run(probe, name), _PROBES))
 
     for name in ("gmail", "calendar", "drive", "docs", "sheets", "contacts"):
         label = _SERVICE_LABELS[name]

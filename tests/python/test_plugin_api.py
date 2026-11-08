@@ -377,6 +377,30 @@ def test_contact_update_route_keeps_existing_details(api_client):
     assert "names" not in body
 
 
+def test_service_rows_propagate_the_request_context(monkeypatch):
+    """The probes run in a thread pool; the request's context must reach them.
+
+    A multiplexing gateway keeps the profile's secrets in a contextvar, and a plain
+    ThreadPoolExecutor does not inherit it — the probes would read credentials unscoped
+    and fail closed.
+    """
+    import contextvars
+
+    marker = contextvars.ContextVar("gw_test_marker", default="missing")
+    token = marker.set("present")
+    try:
+        api = load_api()
+        monkeypatch.setattr(
+            api,
+            "_PROBES",
+            {name: (lambda: ("ready", marker.get())) for name in ("gmail", "calendar", "drive", "contacts")},
+        )
+        rows = api._service_rows()
+    finally:
+        marker.reset(token)
+    assert [row["detail"] for row in rows if row["id"] == "gmail"] == ["present"]
+
+
 def test_calendar_month_route_returns_the_month(api_client):
     client, google = api_client
     google.queue(FakeResponse(200, {"items": []}))
