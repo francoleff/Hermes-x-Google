@@ -59,6 +59,8 @@ provides_tools:
   - google_drive_share
 provides_hooks:
   - pre_tool_call
+  - post_tool_call
+  - on_session_end
 
 # Google owns the OAuth flow. Hermes stores and refreshes the grant; the plugin never
 # sees the access token, refresh token or client secret. The user signs in once from a

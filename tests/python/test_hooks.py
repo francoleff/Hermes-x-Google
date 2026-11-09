@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
 
 from hermes_google_workspace import hooks, tools
@@ -135,7 +137,55 @@ def test_every_registered_tool_is_classified_for_approval():
     assert {schema["name"] for schema in tools.SCHEMAS} == classified
 
 
-def test_hook_registration_uses_the_pre_tool_call_hook():
+def test_forward_approval_names_the_recipients_and_never_quotes_the_note():
+    result = hooks.pre_tool_call(
+        tool_name="google_gmail_forward",
+        args={"message_id": "m1", "to": "bo@example.com, cy@example.com", "note": "private note text"},
+    )
+    assert result["action"] == "approve"
+    assert "2 recipients" in result["message"]
+    assert "private note text" not in result["message"]
+
+
+def test_post_tool_call_records_a_google_write(monkeypatch):
+    from hermes_google_workspace import changes
+    record = Mock()
+    monkeypatch.setattr(changes, "record", record)
+    hooks.post_tool_call(tool_name="google_docs_create", args={"title": "Brief"},
+                         result='{"ok": true}', session_id="sess", turn_id="turn")
+    record.assert_called_once_with("google_docs_create", '{"ok": true}', args={"title": "Brief"},
+                                   session_id="sess", turn_id="turn")
+
+
+def test_post_tool_call_ignores_a_non_google_tool(monkeypatch):
+    from hermes_google_workspace import changes
+    record = Mock()
+    monkeypatch.setattr(changes, "record", record)
+    hooks.post_tool_call(tool_name="terminal", args={}, result='{"ok": true}')
+    record.assert_not_called()
+
+
+def test_post_tool_call_never_raises(monkeypatch):
+    from hermes_google_workspace import changes
+    monkeypatch.setattr(changes, "record", Mock(side_effect=RuntimeError("boom")))
+    assert hooks.post_tool_call(tool_name="google_docs_create", result="{}") is None
+
+
+def test_on_session_end_broadcasts_the_pending_changes(monkeypatch):
+    from hermes_google_workspace import changes
+    broadcast = Mock(return_value=3)
+    monkeypatch.setattr(changes, "broadcast_pending", broadcast)
+    hooks.on_session_end(session_id="sess", turn_id="turn", completed=True)
+    broadcast.assert_called_once_with()
+
+
+def test_on_session_end_never_raises(monkeypatch):
+    from hermes_google_workspace import changes
+    monkeypatch.setattr(changes, "broadcast_pending", Mock(side_effect=RuntimeError("boom")))
+    assert hooks.on_session_end(session_id="sess") is None
+
+
+def test_hook_registration_registers_the_three_hooks():
     class Ctx:
         def __init__(self) -> None:
             self.names: list[str] = []
@@ -145,14 +195,4 @@ def test_hook_registration_uses_the_pre_tool_call_hook():
 
     ctx = Ctx()
     hooks.register(ctx)
-    assert ctx.names == ["pre_tool_call"]
-
-
-def test_forward_approval_names_the_recipients_and_never_quotes_the_note():
-    result = hooks.pre_tool_call(
-        tool_name="google_gmail_forward",
-        args={"message_id": "m1", "to": "bo@example.com, cy@example.com", "note": "private note text"},
-    )
-    assert result["action"] == "approve"
-    assert "2 recipients" in result["message"]
-    assert "private note text" not in result["message"]
+    assert ctx.names == ["pre_tool_call", "post_tool_call", "on_session_end"]

@@ -15,6 +15,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from . import changes
+
 logger = logging.getLogger(__name__)
 
 TOOLSET = "google_workspace"
@@ -164,5 +166,28 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs):
     return {"action": "approve", "message": message}
 
 
+def post_tool_call(tool_name: str = "", args: dict | None = None, result: Any = None,
+                   session_id: str = "", turn_id: str = "", **kwargs):
+    """Record a Google write this call made. Observer: never raises."""
+    if not tool_name.startswith("google_"):
+        return None
+    try:
+        changes.record(tool_name, result, args=args, session_id=session_id, turn_id=turn_id)
+    except Exception:
+        logger.debug("google-workspace change record failed", exc_info=True)
+    return None
+
+
+def on_session_end(session_id: str = "", turn_id: str = "", **kwargs):
+    """Push this turn's Google changes to the Desktop. Observer: never raises."""
+    try:
+        changes.broadcast_pending()
+    except Exception:
+        logger.debug("google-workspace change broadcast failed", exc_info=True)
+    return None
+
+
 def register(ctx) -> None:
     ctx.register_hook("pre_tool_call", pre_tool_call)
+    ctx.register_hook("post_tool_call", post_tool_call)
+    ctx.register_hook("on_session_end", on_session_end)

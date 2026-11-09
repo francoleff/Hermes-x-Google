@@ -136,7 +136,7 @@ def test_wrapper_returns_a_json_envelope_for_bad_input():
 def test_manifest_declares_exactly_the_registered_tools_and_hooks():
     manifest = yaml.safe_load((ROOT / "plugin.yaml").read_text(encoding="utf-8"))
     assert set(manifest["provides_tools"]) == EXPECTED_TOOLS
-    assert manifest["provides_hooks"] == ["pre_tool_call"]
+    assert manifest["provides_hooks"] == ["pre_tool_call", "post_tool_call", "on_session_end"]
 
 
 def test_root_register_wires_every_tool_and_the_approval_hook():
@@ -144,4 +144,4 @@ def test_root_register_wires_every_tool_and_the_approval_hook():
     ctx = RecordingContext()
     plugin.register(ctx)
     assert set(ctx.tools) == EXPECTED_TOOLS
-    assert list(ctx.hooks) == ["pre_tool_call"]
+    assert list(ctx.hooks) == ["pre_tool_call", "post_tool_call", "on_session_end"]
