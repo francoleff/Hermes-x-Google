@@ -404,8 +404,8 @@ SCHEMAS: list[dict] = [
         "name": "google_gmail_modify",
         "description": (
             "Change one Gmail message: mark it read or unread, star or unstar it, archive it "
-            "(remove it from the Inbox) or trash it (move it to Trash). Reversible and sends "
-            "nothing, so it needs no approval. Use it when the user asks to triage, tidy or follow up."
+            "(remove it from the Inbox) or trash it (move it to Trash). Sends "
+            "nothing; only trash asks for approval. Use it when the user asks to triage, tidy or follow up."
         ),
         "parameters": _schema({
             "message_id": {"type": "string", "description": "Gmail message id."},

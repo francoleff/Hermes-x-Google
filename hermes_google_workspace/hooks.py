@@ -68,16 +68,45 @@ def _short(value: Any, limit: int = 60) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def _addresses(value: Any) -> list[str]:
+    """Split a comma/semicolon string or a list into trimmed, non-empty addresses."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        value = value.replace(";", ",").split(",")
+    if not isinstance(value, (list, tuple)):
+        value = [value]
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _recipient_lines(args: dict) -> list[str]:
+    """To/Cc/Bcc lines for an outgoing email. Cc and Bcc are shown in full whenever set,
+    so a hidden recipient can never ride along on an approved send."""
+    to, cc, bcc = (_addresses(args.get(key)) for key in ("to", "cc", "bcc"))
+    total = len(to) + len(cc) + len(bcc)
+    lines = [f"To: {', '.join(to) or '(none)'} ({len(to)} recipient{'s' if len(to) != 1 else ''})"]
+    if cc:
+        lines.append(f"Cc: {', '.join(cc)}")
+    if bcc:
+        lines.append(f"Bcc: {', '.join(bcc)}")
+    if cc or bcc:
+        lines.append(f"Total recipients: {total}")
+    return lines
+
+
+def _guest_list(value: Any) -> str:
+    guests = _addresses(value)
+    return f"{', '.join(guests)} ({len(guests)})" if guests else "(none)"
+
+
 def _detail(tool_name: str, args: dict) -> str:
     if tool_name == "google_gmail_send":
-        to = str(args.get("to") or "").strip()
         subject = str(args.get("subject") or "").strip()
-        count = len([part for part in to.replace(";", ",").split(",") if part.strip()])
-        return f"To: {to or '(none)'} ({count} recipient{'s' if count != 1 else ''})\nSubject: {subject or '(none)'}"
+        return "\n".join([*_recipient_lines(args), f"Subject: {subject or '(none)'}"])
     if tool_name == "google_calendar_create_event":
         return (f"{args.get('summary') or '(untitled)'}\n"
                 f"Starts: {args.get('start') or '(unset)'}\n"
-                f"Attendees: {len(args.get('attendees') or [])}")
+                f"Attendees: {_guest_list(args.get('attendees'))}")
     if tool_name == "google_docs_create":
         return f"Title: {args.get('title') or '(untitled)'}"
     if tool_name == "google_docs_append":
@@ -120,19 +149,17 @@ def _detail(tool_name: str, args: dict) -> str:
             lines.append(f"New start: {args.get('start')}")
         if args.get("end"):
             lines.append(f"New end: {args.get('end')}")
-        guests = args.get("add_attendees") or []
-        if guests:
-            lines.append(f"Add guests: {len(guests) if isinstance(guests, list) else 1}")
+        if _addresses(args.get("add_attendees")):
+            lines.append(f"Add guests: {_guest_list(args.get('add_attendees'))}")
         return "\n".join(lines)
     if tool_name == "google_calendar_cancel_event":
         return f"Event: {args.get('event_id') or '(unset)'}\nTell guests: {args.get('send_updates') or 'all'}"
     if tool_name == "google_calendar_rsvp":
         return f"Event: {args.get('event_id') or '(unset)'}\nReply: {args.get('response') or '(unset)'}"
     if tool_name == "google_gmail_forward":
-        to = str(args.get("to") or "").strip()
-        count = len([part for part in to.replace(";", ",").split(",") if part.strip()])
-        return (f"Message: {args.get('message_id') or '(unset)'}\n"
-                f"To: {to or '(none)'} ({count} recipient{'s' if count != 1 else ''})")
+        return "\n".join([f"Message: {args.get('message_id') or '(unset)'}", *_recipient_lines(args)])
+    if tool_name == "google_gmail_modify":
+        return f"Message: {args.get('message_id') or '(unset)'}"
     if tool_name == "google_contacts_update":
         return f"Contact: {args.get('resource_name') or '(unset)'}"
     if tool_name == "google_drive_rename":
@@ -152,6 +179,11 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs):
 
     if tool_name in _ALWAYS_APPROVE:
         action = _ALWAYS_APPROVE[tool_name]
+    elif tool_name == "google_gmail_modify":
+        # Only trash is gated: the other actions are label tweaks that notify nobody.
+        if str(arguments.get("action") or "").strip().lower() != "trash":
+            return None
+        action = "move an email to Trash"
     elif tool_name in _CONDITIONAL:
         flag, action = _CONDITIONAL[tool_name]
         if not _truthy(arguments.get(flag)):

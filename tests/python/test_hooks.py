@@ -46,7 +46,6 @@ NO_APPROVAL = {
     "google_gmail_search",
     "google_gmail_read",
     "google_gmail_draft",
-    "google_gmail_modify",
     "google_calendar_agenda",
     "google_calendar_check_availability",
     "google_drive_search",
@@ -131,7 +130,7 @@ def test_every_registered_tool_is_classified_for_approval():
     classified = (
         APPROVE_ALWAYS
         | set(APPROVE_WHEN_CONFIRMED)
-        | {"google_meeting_brief"}
+        | {"google_meeting_brief", "google_gmail_modify"}
         | NO_APPROVAL
     )
     assert {schema["name"] for schema in tools.SCHEMAS} == classified
@@ -196,3 +195,37 @@ def test_hook_registration_registers_the_three_hooks():
     ctx = Ctx()
     hooks.register(ctx)
     assert ctx.names == ["pre_tool_call", "post_tool_call", "on_session_end"]
+
+
+def _msg(tool, args):
+    return hooks.pre_tool_call(tool_name=tool, args=args)["message"]
+
+
+def test_send_shows_cc_bcc_and_total_count():
+    m = _msg("google_gmail_send", {"to": "a@x.com", "cc": "b@x.com", "bcc": ["evil@out.com", "c@x.com"], "subject": "S"})
+    assert "Cc: b@x.com" in m
+    assert "Bcc: evil@out.com, c@x.com" in m
+    assert "Total recipients: 4" in m
+
+
+def test_send_without_cc_bcc_stays_compact():
+    m = _msg("google_gmail_send", {"to": "a@x.com", "subject": "S"})
+    assert "Cc:" not in m and "Bcc:" not in m and "Total" not in m
+
+
+def test_forward_shows_cc_bcc_and_total_count():
+    m = _msg("google_gmail_forward", {"message_id": "m1", "to": "a@x.com", "bcc": "evil@out.com"})
+    assert "Bcc: evil@out.com" in m and "Total recipients: 2" in m
+
+
+def test_calendar_prompts_list_guest_addresses():
+    create = _msg("google_calendar_create_event", {"summary": "S", "start": "2026-11-12", "attendees": ["a@x.com", "b@x.com"]})
+    assert "a@x.com, b@x.com" in create
+    update = _msg("google_calendar_update_event", {"event_id": "e1", "add_attendees": "z@out.com"})
+    assert "z@out.com" in update
+
+
+def test_gmail_modify_asks_only_for_trash():
+    assert _msg("google_gmail_modify", {"message_id": "m1", "action": "trash"}).startswith("Google Workspace wants to ")
+    for action in ("archive", "star", "mark_read"):
+        assert hooks.pre_tool_call(tool_name="google_gmail_modify", args={"message_id": "m1", "action": action}) is None

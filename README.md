@@ -118,7 +118,7 @@ Every tool is classified in `hermes_google_workspace/hooks.py` and checked by `t
 |---|---|
 | `google_gmail_send`, `google_gmail_forward` | All read and search tools |
 | `google_calendar_create_event`, `google_calendar_update_event`, `google_calendar_cancel_event`, `google_calendar_rsvp` | `google_gmail_draft` (saves a draft; sends nothing) |
-| `google_docs_create`, `google_docs_append`, `google_docs_replace_text` | `google_gmail_modify` (reversible; notifies nobody) |
+| `google_docs_create`, `google_docs_append`, `google_docs_replace_text` | `google_gmail_modify` except `trash`, which asks (other actions are reversible; notify nobody) |
 | `google_sheets_create`, `google_sheets_append`, `google_sheets_update_range`, `google_sheets_create_tab` | `google_gmail_update_draft` (replaces a draft; sends nothing) |
 | `google_drive_create_folder`, `google_drive_move`, `google_drive_rename`, `google_drive_trash`, `google_drive_share` | `google_calendar_check_availability`, `google_calendar_search` |
 | `google_contacts_create`, `google_contacts_update`, `google_contacts_delete` | `google_drive_get`, `google_sheets_metadata` |
