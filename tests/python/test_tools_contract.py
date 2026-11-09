@@ -63,6 +63,10 @@ class RecordingContext:
     def __init__(self) -> None:
         self.tools: dict[str, dict] = {}
         self.hooks: dict[str, list] = {}
+        self.skills: dict[str, dict] = {}
+
+    def register_skill(self, name, path, description="", **kwargs):
+        self.skills[name] = {"path": path, "description": description}
 
     def register_tool(self, *, name, toolset, schema, handler, description="", emoji="", **kwargs):
         self.tools[name] = {

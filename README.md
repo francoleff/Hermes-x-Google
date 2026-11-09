@@ -127,6 +127,17 @@ Every tool is classified in `hermes_google_workspace/hooks.py` and checked by `t
 
 The approval message names what will change (recipients, title, row count). The approval code does not read or quote email bodies. On the plugin's side, consequential write endpoints refuse requests without `confirm: true`. The desktop UI sends that flag only after you press confirm in a review dialog.
 
+## Skills
+
+The plugin registers four skills that teach the agent how to use the tools well. They load on demand and live in `skills/`.
+
+| Skill | Use it for |
+|---|---|
+| `email` | Finding, drafting, sending, forwarding and triaging Gmail, treating email bodies as untrusted |
+| `calendar` | Checking availability, creating, changing, cancelling and answering events |
+| `drive-docs-sheets` | Drive files, Docs, Sheets and Contacts |
+| `workflows` | Meeting briefs, email to event, invoices to Sheet, organizing Drive (preview first, then confirm) |
+
 ## Tool reference
 
 All tools belong to the `google_workspace` toolset. A tool returns `{"ok": true, "data": …}` on success. On failure it returns `{"ok": false, "error": {"code", "message"}}`, plus a `hint` when one exists.
