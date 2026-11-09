@@ -27,6 +27,8 @@ Nothing is sent, shared, created, moved or cancelled until you approve it. Reads
 | **Hermes only** (no sidebar controls) | Search calendar events; forward a message in one step; edit a draft; read one Drive file's details; read a Sheet's tabs and row counts | `google_calendar_search`, `google_gmail_forward`, `google_gmail_update_draft`, `google_drive_get`, `google_sheets_metadata` |
 | **Settings** | What Hermes can reach, live connection status, sign-in and sign-out commands | none |
 
+**Changes tab.** After Hermes finishes a task, the **Changes** tab lists the Google writes that task made — emails sent, documents and sheets created or edited, events booked, Drive moves — newest first, each with a link that opens the item in Google. Calls that changed nothing (no matches replaced, an invoice already in the sheet, a preview) are left out. Contacts, cancelled events, invitation replies and shares have no link to give, so they appear without one. The page keeps the last 50 entries across reloads, and nothing is recorded until a task finishes. It reflects what Hermes did through its tools, not what you did by clicking in the page.
+
 ### Not implemented yet
 
 These are missing from the sidebar, from Hermes, or both:
