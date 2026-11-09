@@ -45,8 +45,74 @@ const TABS = [
   { id: 'Docs', label: 'Docs', icon: 'book', service: 'docs' },
   { id: 'Sheets', label: 'Sheets', icon: 'table', service: 'sheets' },
   { id: 'Contacts', label: 'Contacts', icon: 'organization', service: 'contacts' },
+  { id: 'Changes', label: 'Changes', icon: 'history' },
   { id: 'Settings', label: 'Settings', icon: 'settings-gear' },
 ]
+
+// ── Recent changes ───────────────────────────────────────────────────────────
+// The Python hooks record each Google write Hermes makes and push the turn's batch as a plugin
+// event. The feed is kept here, newest first, in plugin-scoped storage so a reload keeps it.
+
+const CHANGES_EVENT = 'plugin.google-workspace.turn.changes'
+const CHANGES_STORAGE_KEY = 'recentChanges'
+const CHANGES_LIMIT = 50
+
+let recentChanges = []
+const changeListeners = new Set()
+
+function cleanChange(entry) {
+  if (!entry || typeof entry !== 'object') return null
+  const id = String(entry.id || '')
+  const action = String(entry.action || '')
+  if (!id || !action) return null
+  const url = typeof entry.url === 'string' && /^https?:\/\//i.test(entry.url) ? entry.url : ''
+  return {
+    id,
+    at: String(entry.at || ''),
+    service: String(entry.service || ''),
+    action,
+    title: String(entry.title || ''),
+    url,
+  }
+}
+
+function readStoredChanges() {
+  try {
+    const stored = pluginCtx?.storage?.get?.(CHANGES_STORAGE_KEY, [])
+    return Array.isArray(stored) ? stored.map(cleanChange).filter(Boolean).slice(0, CHANGES_LIMIT) : []
+  } catch {
+    return []
+  }
+}
+
+function setRecentChanges(next) {
+  recentChanges = next
+  try { pluginCtx?.storage?.set?.(CHANGES_STORAGE_KEY, next) } catch { /* storage is optional */ }
+  changeListeners.forEach((listener) => listener(next))
+}
+
+// A turn's entries arrive oldest first; the feed shows the newest first.
+function recordChanges(entries) {
+  if (!Array.isArray(entries)) return
+  const fresh = entries.map(cleanChange).filter(Boolean).reverse()
+  if (!fresh.length) return
+  const known = new Set(fresh.map((entry) => entry.id))
+  setRecentChanges([...fresh, ...recentChanges.filter((entry) => !known.has(entry.id))].slice(0, CHANGES_LIMIT))
+}
+
+function clearChanges() {
+  setRecentChanges([])
+}
+
+function useRecentChanges() {
+  const [changes, setChanges] = useState(recentChanges)
+  useEffect(() => {
+    changeListeners.add(setChanges)
+    setChanges(recentChanges)
+    return () => { changeListeners.delete(setChanges) }
+  }, [])
+  return changes
+}
 
 // ── Backend plumbing ─────────────────────────────────────────────────────────
 
@@ -3065,6 +3131,31 @@ function ContactDetail({ contact, onCompose, onClose }) {
   ] })
 }
 
+function ChangesTab() {
+  const changes = useRecentChanges()
+  return jsxs(Panel, { style: { padding: '0.9rem 1rem' }, children: [
+    jsx(SectionHeading, {
+      title: 'Recent changes',
+      detail: 'From Hermes tasks',
+      action: changes.length ? jsx(Button, { variant: 'ghost', size: 'xs', onClick: clearChanges, children: 'Clear changes' }) : null,
+    }),
+    !changes.length
+      ? jsx(EmptyBlock, { icon: 'history', title: 'No changes yet', description: 'When Hermes sends, creates or edits something in your Google account, it shows up here with a link.' })
+      : jsx('div', { style: { display: 'flex', flexDirection: 'column' }, children: changes.map((entry) => jsxs('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.6rem 0.1rem', borderTop: '1px solid var(--ui-border-subtle, var(--border))' },
+        children: [
+          jsx(ServiceIcon, { service: entry.service }),
+          jsxs('div', { style: { flex: 1, minWidth: 0 }, children: [
+            jsx('div', { style: { fontSize: '0.78rem', fontWeight: 600 }, children: entry.action }),
+            entry.title ? jsx('div', { style: { fontSize: '0.73rem', color: 'var(--ui-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: entry.title }) : null,
+          ] }),
+          jsx(MetaLine, { icon: 'history', title: entry.at, children: fmtRelative(entry.at) }),
+          entry.url ? jsx(LinkAction, { onClick: () => openUrl(entry.url), children: 'Open' }) : null,
+        ],
+      }, entry.id)) }),
+  ] })
+}
+
 function ContactsTab({ selectedId, onSelect, onCompose, narrow }) {
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
@@ -3892,6 +3983,8 @@ function GoogleWorkspacePage() {
         return jsx(SheetsTab, { selectedSheet, onSelect: setSelectedSheet, narrow })
       case 'Contacts':
         return jsx(ContactsTab, { selectedId: selectedContactId, onSelect: setSelectedContactId, onCompose: openCompose, narrow })
+      case 'Changes':
+        return jsx(ChangesTab, {})
       case 'Settings':
         return jsx(SettingsView, { status: status.data, onRetry: () => status.refetch(), retrying: status.isFetching })
       default:
@@ -3955,6 +4048,8 @@ export default {
   defaultEnabled: true,
   register(ctx) {
     pluginCtx = ctx
+    recentChanges = readStoredChanges()
+    ctx.onEvent?.(CHANGES_EVENT, (event) => recordChanges(event?.payload?.changes))
     ctx.register({
       id: 'page',
       area: ROUTES_AREA,

@@ -53,6 +53,7 @@ function defaultRoutes() {
 
 function fakeContext(routes) {
   const registrations = []
+  const eventListeners = []
   const rest = vi.fn(async (path, options = {}) => {
     const key = `${(options.method || 'GET').toUpperCase()} ${path}`
     const match = routes.find(([pattern]) => pattern.test(key))
@@ -64,8 +65,10 @@ function fakeContext(routes) {
   return {
     rest,
     registrations,
+    eventListeners,
     register: (entry) => { registrations.push(entry); return () => {} },
     registerMany: (entries) => entries.map((entry) => { registrations.push(entry); return () => {} }),
+    onEvent: (type, listener) => { eventListeners.push({ type, listener }); return () => {} },
     onDispose: () => {},
     i18n: { register: () => {}, t: (key) => key },
     os: { openExternal: vi.fn(async () => true), writeClipboard: vi.fn(async () => true) },
@@ -229,13 +232,13 @@ describe('connection', () => {
     expect(tabs()).toHaveLength(0)
   })
 
-  it('lists all eight areas once connected and loads a tab only when it is opened', async () => {
+  it('lists all nine areas once connected and loads a tab only when it is opened', async () => {
     const ctx = fakeContext([...defaultRoutes(), [/^GET \/contacts/, () => ok({ contacts: [], count: 0 })]])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     expect(tabs().map((node) => node.textContent.trim())).toEqual([
-      'Workspace', 'Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Contacts', 'Settings',
+      'Workspace', 'Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Contacts', 'Changes', 'Settings',
     ])
     expect(tab('Workspace').getAttribute('aria-selected')).toBe('true')
 
@@ -250,7 +253,7 @@ describe('connection', () => {
     const ctx = fakeContext(defaultRoutes())
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     const list = container.querySelector('[role="tablist"]')
     const press = async (key) => act(async () => {
       list.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
@@ -280,7 +283,7 @@ describe('connection', () => {
     const ctx = fakeContext([...defaultRoutes(), [/^GET \/gmail\?/, () => refused]])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Gmail'))
     await until(() => container.textContent.includes('Gmail is not allowed for this action.'), 'the permission message')
     expect(container.textContent).toContain('Sign in again and approve the Gmail permission.')
@@ -300,7 +303,7 @@ describe('writes wait for review and confirmation', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Sheets'))
     await until(() => container.textContent.includes('Budget'), 'the spreadsheet list')
     await click(rowButton('Budget'))
@@ -333,7 +336,7 @@ describe('writes wait for review and confirmation', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Sheets'))
     await until(() => container.textContent.includes('Budget'), 'the spreadsheet list')
     await click(rowButton('Budget'))
@@ -357,7 +360,7 @@ describe('writes wait for review and confirmation', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Contacts'))
     await until(() => button('New contact'), 'the New contact button')
     await click(button('New contact'))
@@ -397,7 +400,7 @@ describe('writes wait for review and confirmation', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Gmail'))
     await until(() => rowButton('Pricing'), 'the message list')
     await click(rowButton('Pricing'))
@@ -416,7 +419,7 @@ describe('error text from the host', () => {
     const ctx = fakeContext([...defaultRoutes(), [/^GET \/gmail\?/, () => plain]])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Gmail'))
     await until(() => container.textContent.includes('Gmail sign-in is missing.'), 'the plain error message')
     expect(container.querySelector('[role="alert"]')).not.toBeNull()
@@ -437,7 +440,7 @@ describe('search across services', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     const input = container.querySelector('input[placeholder="Search Gmail, Calendar and Drive at once"]')
     setInput(input, 'pricing')
     await act(async () => {
@@ -466,7 +469,7 @@ describe('calendar', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Calendar'))
     await until(() => button('New event'), 'the New event button')
     await click(button('New event'))
@@ -481,7 +484,7 @@ describe('settings', () => {
     const ctx = fakeContext(defaultRoutes())
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Settings'))
     await until(() => container.textContent.includes('What Hermes can reach'), 'the settings page')
     for (const area of ['Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Contacts']) {
@@ -499,7 +502,7 @@ describe('overview widgets', () => {
     const ctx = fakeContext(defaultRoutes())
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await until(() => container.textContent.includes('Today and tomorrow'), 'the overview widgets')
     expect(widgetOrder()).toEqual(DEFAULT_ORDER)
 
@@ -531,7 +534,7 @@ describe('overview widgets', () => {
     })
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await until(() => container.textContent.includes('The cross-app part'), 'the stored layout')
     expect(widgetOrder()).toEqual(['workflows', 'search', 'stats'])
   })
@@ -541,7 +544,7 @@ describe('overview widgets', () => {
     ctx.storage.set('overview.layout', { order: ['nonsense'], hidden: 'not-a-list' })
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await until(() => container.textContent.includes('Today and tomorrow'), 'the default layout')
     expect(widgetOrder()).toEqual(DEFAULT_ORDER)
   })
@@ -676,7 +679,7 @@ describe('changing my calendar', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Calendar'))
     await until(() => rowButton('Board prep'), 'the event row')
     await click(rowButton('Board prep'))
@@ -706,7 +709,7 @@ describe('changing my calendar', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Calendar'))
     await until(() => rowButton('Board prep'), 'the event row')
     await click(rowButton('Board prep'))
@@ -741,7 +744,7 @@ describe('changing my calendar', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Calendar'))
     await until(() => rowButton('Standup'), 'the event row')
     await click(rowButton('Standup'))
@@ -765,7 +768,7 @@ describe('changing my calendar', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Calendar'))
     await until(() => rowButton('Team sync'), 'the event row')
     await click(rowButton('Team sync'))
@@ -788,7 +791,7 @@ describe('changing my calendar', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Calendar'))
     await until(() => rowButton('Board prep'), 'the event row')
     await click(rowButton('Board prep'))
@@ -807,7 +810,7 @@ describe('changing my files', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Drive'))
     await until(() => rowButton('Plan'), 'the file row')
     await click(rowButton('Plan'))
@@ -833,7 +836,7 @@ describe('changing my files', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Drive'))
     await until(() => rowButton('Plan'), 'the file row')
     await click(rowButton('Plan'))
@@ -862,7 +865,7 @@ describe('changing docs, sheets and contacts', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Docs'))
     await until(() => rowButton('Plan'), 'the document row')
     await click(rowButton('Plan'))
@@ -896,7 +899,7 @@ describe('changing docs, sheets and contacts', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Sheets'))
     await until(() => rowButton('Budget'), 'the spreadsheet row')
     await click(rowButton('Budget'))
@@ -931,7 +934,7 @@ describe('changing docs, sheets and contacts', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Sheets'))
     await until(() => rowButton('Budget'), 'the spreadsheet row')
     await click(rowButton('Budget'))
@@ -957,7 +960,7 @@ describe('changing docs, sheets and contacts', () => {
     ])
     plugin.register(ctx)
     mount(ctx)
-    await until(() => tabs().length === 8, 'the eight service tabs')
+    await until(() => tabs().length === 9, 'the nine tabs')
     await click(tab('Contacts'))
     await until(() => rowButton('Ana Lopez'), 'the contact row')
     await click(rowButton('Ana Lopez'))
@@ -973,5 +976,99 @@ describe('changing docs, sheets and contacts', () => {
     await until(() => writes(ctx).length === 1, 'the contact update request')
     expect(writes(ctx)[0][0]).toBe('/contacts/update')
     expect(writes(ctx)[0][1].body).toEqual({ resourceName: 'people/c9', phone: '+31 6 000 0000', confirm: true })
+  })
+})
+
+const CHANGES_EVENT = 'plugin.google-workspace.turn.changes'
+const CHANGE = {
+  id: 'google_docs_create:17',
+  at: '2026-11-09T12:34:56Z',
+  service: 'docs',
+  action: 'Created document',
+  title: 'Meeting brief — Sync',
+  url: 'https://docs.google.com/document/d/d1/edit',
+  sessionId: 'sess',
+  turnId: 'turn',
+}
+
+function fireChanges(ctx, changes) {
+  const listener = ctx.eventListeners.find((entry) => entry.type === CHANGES_EVENT)?.listener
+  if (!listener) throw new Error('The plugin did not subscribe to ' + CHANGES_EVENT)
+  act(() => listener({ payload: { changes } }))
+}
+
+describe('recent changes', () => {
+  it('lists Changes between Contacts and Settings', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 9, 'the nine tabs')
+    expect(tabs().map((node) => node.textContent.trim())).toEqual([
+      'Workspace', 'Gmail', 'Calendar', 'Drive', 'Docs', 'Sheets', 'Contacts', 'Changes', 'Settings',
+    ])
+  })
+
+  it('shows the empty state before any task changes something', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 9, 'the nine tabs')
+    await click(tab('Changes'))
+    await until(() => container.textContent.includes('No changes yet'), 'the empty state')
+  })
+
+  it("records a turn's changes, links each item, and clears the feed", async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 9, 'the nine tabs')
+    await click(tab('Changes'))
+
+    fireChanges(ctx, [CHANGE])
+    await until(() => container.textContent.includes('Meeting brief — Sync'), 'the recorded change')
+    expect(container.textContent).toContain('Created document')
+
+    const open = [...container.querySelectorAll('button')].find((node) => node.textContent.trim() === 'Open')
+    await click(open)
+    expect(ctx.os.openExternal).toHaveBeenCalledWith(CHANGE.url)
+
+    expect(ctx.storage.get('recentChanges', null)).toHaveLength(1)
+
+    await click(button('Clear changes'))
+    await until(() => container.textContent.includes('No changes yet'), 'the cleared feed')
+    expect(ctx.storage.get('recentChanges', null)).toEqual([])
+  })
+
+  it('restores the feed from storage on the next visit', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    ctx.storage.set('recentChanges', [CHANGE])
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 9, 'the nine tabs')
+    await click(tab('Changes'))
+    await until(() => container.textContent.includes('Meeting brief — Sync'), 'the stored change')
+  })
+
+  it('shows a change that has no link without an Open button', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 9, 'the nine tabs')
+    await click(tab('Changes'))
+    fireChanges(ctx, [{ ...CHANGE, id: 'google_contacts_create:3', service: 'contacts', action: 'Created contact', title: 'Ada Lovelace', url: '' }])
+    await until(() => container.textContent.includes('Ada Lovelace'), 'the linkless change')
+    expect(button('Open')).toBeNull()
+  })
+
+  it('keeps the newest fifty and ignores malformed entries', async () => {
+    const ctx = fakeContext(defaultRoutes())
+    plugin.register(ctx)
+    mount(ctx)
+    await until(() => tabs().length === 9, 'the nine tabs')
+    const many = Array.from({ length: 60 }, (_, index) => ({ ...CHANGE, id: `google_docs_create:${index}`, title: `Doc ${index}` }))
+    fireChanges(ctx, [...many, null, { title: 'no id' }, 'junk'])
+    expect(ctx.storage.get('recentChanges', null)).toHaveLength(50)
+    // A turn's batch arrives oldest first, so the last entry is the newest.
+    expect(ctx.storage.get('recentChanges', null)[0].title).toBe('Doc 59')
   })
 })
