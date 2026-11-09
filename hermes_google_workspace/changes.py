@@ -12,6 +12,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from collections import deque
 from typing import Any, Callable
 
@@ -27,6 +28,8 @@ TITLE_LIMIT = 80
 _lock = threading.Lock()
 _pending: deque[dict] = deque(maxlen=BUFFER_LIMIT)
 _counter = itertools.count(1)
+# Entries persist in the Desktop across backend restarts, so ids carry a per-process token.
+_RUN = uuid.uuid4().hex[:8]
 
 _SHEETS_URL = "https://docs.google.com/spreadsheets/d/{}/edit"
 _MODIFY_ACTIONS = {
@@ -80,8 +83,13 @@ def _nested(*path: str):
     return lambda data, args: _get(data, *path)
 
 
+def _moved(data: dict) -> list:
+    """Files that actually moved; a failed move is listed with an ``error`` key."""
+    return [item for item in data.get("moved") or [] if isinstance(item, dict) and not item.get("error")]
+
+
 def _organize_title(data: dict, args: dict) -> str:
-    count = len(data.get("moved") or [])
+    count = len(_moved(data))
     return f"{count} file{'s' if count != 1 else ''} → {_get(data, 'folder', 'name') or ''}"
 
 
@@ -130,7 +138,7 @@ _RULES: dict[str, tuple] = {
         lambda d, a: bool(d.get("created"))),
     "google_organize_drive": _simple(
         "drive", "Organized Drive", _organize_title, _nested("folder", "webUrl"),
-        lambda d, a: bool(d.get("created")) and len(d.get("moved") or []) > 0),
+        lambda d, a: bool(d.get("created")) and len(_moved(d)) > 0),
     "google_meeting_brief": _simple(
         "docs", "Saved brief", _nested("document", "title"), _nested("document", "webUrl"),
         lambda d, a: bool(d.get("created"))),
@@ -180,7 +188,7 @@ def record(tool_name: str, result: Any, *, args: dict | None = None,
         return None
     with _lock:
         entry = {
-            "id": f"{tool_name}:{next(_counter)}",
+            "id": f"{tool_name}:{_RUN}:{next(_counter)}",
             "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "service": service,
             "action": _action(tool_name, action, data),

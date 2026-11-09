@@ -183,3 +183,20 @@ def test_broadcast_pending_outside_hermes_does_nothing_and_does_not_raise(monkey
     monkeypatch.setitem(sys.modules, "hermes_cli", None)
     changes.record("google_docs_create", DOCS_CREATE)
     assert changes.broadcast_pending() == 0
+
+
+def test_organize_drive_ignores_moves_that_failed():
+    failed = {"ok": True, "data": {"created": True, "moved": [{"id": "a", "name": "A", "error": "denied"}],
+                                    "folder": {"name": "Archive", "webUrl": "https://drive.google.com/drive/folders/f1"}}}
+    assert changes.record("google_organize_drive", failed) is None
+    mixed = {"ok": True, "data": {"created": True, "moved": [{"id": "a", "name": "A", "error": "denied"}, {"id": "b", "name": "B"}],
+                                   "folder": {"name": "Archive", "webUrl": "https://drive.google.com/drive/folders/f1"}}}
+    assert changes.record("google_organize_drive", mixed)["title"] == "1 file → Archive"
+
+
+def test_entry_ids_differ_across_a_backend_restart(monkeypatch):
+    first = changes.record("google_docs_create", DOCS_CREATE)["id"]
+    monkeypatch.setattr(changes, "_counter", __import__("itertools").count(1))
+    monkeypatch.setattr(changes, "_RUN", "other-run")
+    second = changes.record("google_docs_create", DOCS_CREATE)["id"]
+    assert first != second
